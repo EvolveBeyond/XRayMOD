@@ -72,12 +72,14 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
     print("\n[2/5] Creating D1 database...")
     try:
         d1 = _cf(token, f"/accounts/{account_id}/d1/database", "POST", {"name": d1_name})
-        d1_id = d1["result"]["id"]
+        d1_id = d1["result"].get("uuid") or d1["result"].get("id")
+        if not d1_id:
+            raise RuntimeError(f"No ID in response: {d1}")
         print(f"  ✓ Database created: {d1_name} ({d1_id})")
     except RuntimeError:
         existing = _cf(token, f"/accounts/{account_id}/d1/database?name={d1_name}")
         if existing.get("result"):
-            d1_id = existing["result"][0]["uuid"]
+            d1_id = existing["result"][0].get("uuid") or existing["result"][0].get("id")
             print(f"  ✓ Database found: {d1_name} ({d1_id})")
         else:
             raise
