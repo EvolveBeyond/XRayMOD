@@ -21,20 +21,24 @@ XrayMOD is a serverless proxy management panel that runs entirely on Cloudflare 
 
 ## Architecture
 
-```
+- **Cloudflare Worker** — Single deployment serving both the API and the React SPA
+- **Static Assets** — Bundled React app served by the Worker
+- **API Router** — Handles authentication, user/node/protocol management, settings, and subscriptions
+- **Proxy Handler** — WebSocket upgrade for VLESS/Trojan/Shadowsocks traffic
+- **D1 Database** — Stores users, protocols, configs, and key-value settings
 ┌─────────────────────────────────────────────────────────┐
-│  Cloudflare Worker                                       │
+│  Cloudflare Worker                                      │
 │  ┌─────────────┐  ┌──────────────────────────────────┐  │
-│  │ Static Assets│  │ API Router                       │  │
-│  │ (React SPA)  │  │ /api/login, /api/logout          │  │
-│  │              │  │ /api/users, /api/nodes            │  │
-│  └─────────────┘  │ /api/protocols, /api/configs      │  │
-│                    │ /api/settings, /api/health        │  │
-│                    │ /sub/:token (subscription)        │  │
-│                    │ /proxy/* (traffic handler)        │  │
-│                    └──────────────────────────────────┘  │
+│  │ Static Assets│ │ API Router                       │  │
+│  │ (React SPA)  │ │ /api/login, /api/logout          │  │
+│  │              │ │ /api/users, /api/nodes           │  │
+│  └─────────────┘  │ /api/protocols, /api/configs     │  │
+│                    │ /api/settings, /api/health      │  │
+│                    │ /sub/:token (subscription)      │  │
+│                    │ /proxy/* (traffic handler)      │  │
+│                    └─────────────────────────────────┘  │
 │  ┌─────────────────────────────────────────────────────┐│
-│  │ D1 Database: users | protocols | configs | kvstore ││
+│  │ D1 Database: users | protocols | configs | kvstore  ││
 │  └─────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────┘
 ```
