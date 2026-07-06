@@ -49,7 +49,7 @@ def _generate_password(length: int = 16) -> str:
 # ── Fetch panel code from GitHub ─────────────────────────────
 
 def fetch_panel_code() -> str:
-    url = f"{PANEL_GITHUB}/worker/index.ts"
+    url = f"{PANEL_GITHUB}/worker.js"
     print("  Downloading panel code...")
     resp = httpx.get(url, timeout=30, follow_redirects=True)
     if resp.status_code != 200:
