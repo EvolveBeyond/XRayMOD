@@ -132,17 +132,32 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
 
     # Step 5: Enable workers.dev subdomain
     print("\n[5/5] Enabling workers.dev subdomain...")
-    try:
-        _cf(token, f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", "PUT", {"enabled": True})
-    except RuntimeError:
-        print("  ⚠ Subdomain enablement pending")
 
+    # Ensure the account has a workers.dev subdomain
     subdomain = "workers.dev"
     try:
         sub = _cf(token, f"/accounts/{account_id}/workers/subdomain")
-        subdomain = sub["result"].get("subdomain", "workers.dev")
+        subdomain = sub["result"].get("subdomain") or sub["result"].get("name") or "workers.dev"
     except RuntimeError:
-        pass
+        # Try to set the subdomain
+        for method in ("PUT", "POST", "PATCH"):
+            try:
+                sub = _cf(token, f"/accounts/{account_id}/workers/subdomain", method, {"subdomain": f"xraymod-{secrets.token_hex(4)}"})
+                subdomain = sub["result"].get("subdomain") or "workers.dev"
+                break
+            except RuntimeError:
+                continue
+
+    # Enable the worker on the subdomain
+    for method in ("POST", "PUT", "PATCH"):
+        try:
+            _cf(token, f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", method, {"enabled": True})
+            print(f"  ✓ Subdomain enabled: {subdomain}")
+            break
+        except RuntimeError:
+            continue
+    else:
+        print(f"  ⚠ Subdomain will be available shortly at: {subdomain}")
 
     worker_url = f"https://{worker_name}.{subdomain}"
 
