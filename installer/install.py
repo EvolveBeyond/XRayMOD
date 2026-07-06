@@ -4,7 +4,7 @@
 # ///
 """
 XrayMOD Installer — Stage 2 (Python / uv)
-Deploys the XrayMOD panel to a Cloudflare account using the Cloudflare API.
+Deploys the XrayMOD panel to a Cloudflare account via OAuth (no API token needed).
 
 Usage (called by install.sh):
     uv run install.py
@@ -12,22 +12,149 @@ Usage (called by install.sh):
 
 from __future__ import annotations
 
-import base64
+import hashlib
 import json
 import secrets
 import sys
-import textwrap
-from urllib.parse import quote
+import threading
+import webbrowser
+from base64 import urlsafe_b64encode
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
 CF_API = "https://api.cloudflare.com/client/v4"
 PANEL_GITHUB = "https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main"
 
+# OAuth settings — these are the app's own Cloudflare OAuth credentials
+OAUTH_CLIENT_ID = "eb14e6bc5d43ef8a0f4a549e6f03b690"
+OAUTH_AUTH_URL = "https://dash.cloudflare.com/oauth2/auth"
+OAUTH_TOKEN_URL = "https://dash.cloudflare.com/oauth2/token"
+OAUTH_SCOPES = [
+    "account:read",
+    "user:read",
+    "workers:write",
+    "workers_kv:write",
+    "workers_scripts:write",
+    "d1:write",
+]
+OAUTH_REDIRECT_PORT = 18976
+
+# ── OAuth State ──────────────────────────────────────────────
+
+_oauth_state: str = ""
+_oauth_code_verifier: str = ""
+_oauth_result: dict = {}
+_oauth_event = threading.Event()
+
+
+def _gen_state() -> str:
+    return urlsafe_b64encode(secrets.token_bytes(32)).decode().rstrip("=")
+
+
+def _gen_verifier() -> str:
+    return urlsafe_b64encode(secrets.token_bytes(33)).decode().rstrip("=")
+
+
+def _gen_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+# ── OAuth Callback Server ────────────────────────────────────
+
+class OAuthCallbackHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        global _oauth_result
+        parsed = urlparse(self.path)
+
+        if parsed.path != "/callback":
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+        error = params.get("error", [None])[0]
+
+        if error:
+            _oauth_result = {"ok": False, "error": error}
+            html = self._page("Authorization Failed", f"Error: {error}", False)
+        elif not code or state != _oauth_state:
+            _oauth_result = {"ok": False, "error": "Invalid state"}
+            html = self._page("Authorization Failed", "Invalid state parameter", False)
+        else:
+            try:
+                token_data = _exchange_code(code)
+                _oauth_result = {"ok": True, "token": token_data["access_token"]}
+                html = self._page("Connected", "You can close this tab and return to the terminal.", True)
+            except Exception as e:
+                _oauth_result = {"ok": False, "error": str(e)}
+                html = self._page("Authorization Failed", str(e), False)
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+        self.wfile.write(html.encode())
+
+        _oauth_event.set()
+
+    def _page(self, title: str, message: str, success: bool) -> str:
+        color = "#10b981" if success else "#ef4444"
+        icon = "✓" if success else "✗"
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>{title}</title>
+<style>
+body {{ margin:0; background:#09090b; color:#fafafa; font-family:system-ui,sans-serif;
+       display:grid; place-items:center; min-height:100vh; }}
+.box {{ text-align:center; padding:3rem; max-width:400px; }}
+.icon {{ font-size:3rem; margin-bottom:1rem; color:{color}; }}
+h1 {{ font-size:1.5rem; margin:0 0 0.5rem; }}
+p {{ color:#a1a1aa; margin:0; }}
+</style></head><body>
+<div class="box">
+  <div class="icon">{icon}</div>
+  <h1>{title}</h1>
+  <p>{message}</p>
+</div></body></html>"""
+
+    def log_message(self, *args):
+        pass
+
+
+def _start_oauth_server() -> HTTPServer:
+    server = HTTPServer(("127.0.0.1", OAUTH_REDIRECT_PORT), OAuthCallbackHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def _exchange_code(code: str) -> dict:
+    data = urlencode({
+        "client_id": OAUTH_CLIENT_ID,
+        "code": code,
+        "code_verifier": _oauth_code_verifier,
+        "redirect_uri": f"http://localhost:{OAUTH_REDIRECT_PORT}/callback",
+        "grant_type": "authorization_code",
+    }).encode()
+
+    resp = httpx.post(OAUTH_TOKEN_URL, content=data, headers={
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+    }, timeout=30)
+
+    result = resp.json()
+    if not result.get("access_token"):
+        desc = result.get("error_description", result.get("error", "Unknown error"))
+        raise RuntimeError(f"Token exchange failed: {desc}")
+    return result
+
+
 # ── Helpers ──────────────────────────────────────────────────
 
 def _cf(token: str, path: str, method: str = "GET", body: dict | None = None) -> dict:
-    """Make a Cloudflare API request."""
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     resp = httpx.request(method, f"{CF_API}{path}", headers=headers, json=body, timeout=30)
     data = resp.json()
@@ -38,14 +165,12 @@ def _cf(token: str, path: str, method: str = "GET", body: dict | None = None) ->
 
 
 def _input(prompt: str, default: str = "") -> str:
-    """Read input with optional default."""
     suffix = f" [{default}]" if default else ""
     val = input(f"  {prompt}{suffix}: ").strip()
     return val or default
 
 
 def _generate_password(length: int = 16) -> str:
-    """Generate a random admin password."""
     chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%"
     return "".join(secrets.choice(chars) for _ in range(length))
 
@@ -53,9 +178,8 @@ def _generate_password(length: int = 16) -> str:
 # ── Fetch panel code from GitHub ─────────────────────────────
 
 def fetch_panel_code() -> str:
-    """Download the bundled worker script from GitHub."""
     url = f"{PANEL_GITHUB}/worker/index.ts"
-    print(f"  Downloading panel code...")
+    print("  Downloading panel code...")
     resp = httpx.get(url, timeout=30, follow_redirects=True)
     if resp.status_code != 200:
         raise RuntimeError(f"Failed to download panel code: HTTP {resp.status_code}")
@@ -65,14 +189,7 @@ def fetch_panel_code() -> str:
 
 # ── Deploy ───────────────────────────────────────────────────
 
-def deploy(
-    token: str,
-    worker_name: str,
-    d1_name: str,
-    admin_password: str,
-) -> dict:
-    """Deploy XrayMOD panel to a Cloudflare account."""
-
+def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> dict:
     # Step 1: Get account ID
     print("\n[1/5] Finding Cloudflare account...")
     accounts = _cf(token, "/accounts?per_page=1")
@@ -87,7 +204,6 @@ def deploy(
         d1_id = d1["result"]["id"]
         print(f"  ✓ Database created: {d1_name} ({d1_id})")
     except RuntimeError:
-        # Try to find existing
         existing = _cf(token, f"/accounts/{account_id}/d1/database?name={d1_name}")
         if existing.get("result"):
             d1_id = existing["result"][0]["uuid"]
@@ -111,43 +227,34 @@ def deploy(
         ],
     }
 
-    # Build multipart form
     boundary = f"----formdata-{secrets.token_hex(8)}"
     parts = []
-
-    # Metadata part
     parts.append(
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="metadata"\r\n'
         f"Content-Type: application/json\r\n\r\n"
         f"{json.dumps(metadata)}\r\n"
     )
-
-    # Worker script part
     parts.append(
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="worker.js"; filename="worker.js"\r\n'
         f"Content-Type: application/javascript+module\r\n\r\n"
         f"{panel_code}\r\n"
     )
-
     parts.append(f"--{boundary}--\r\n")
     body = "".join(parts).encode()
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": f"multipart/form-data; boundary={boundary}",
-    }
-
     resp = httpx.put(
         f"{CF_API}/accounts/{account_id}/workers/scripts/{worker_name}",
-        headers=headers,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
         content=body,
         timeout=60,
     )
     if resp.status_code not in (200, 201):
         raise RuntimeError(f"Worker upload failed: {resp.text}")
-
     print(f"  ✓ Worker uploaded: {worker_name}")
 
     # Step 5: Enable workers.dev subdomain
@@ -155,9 +262,8 @@ def deploy(
     try:
         _cf(token, f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", "PUT", {"enabled": True})
     except RuntimeError:
-        print("  ⚠ Subdomain enablement will be available shortly")
+        print("  ⚠ Subdomain enablement pending")
 
-    # Get subdomain
     subdomain = "workers.dev"
     try:
         sub = _cf(token, f"/accounts/{account_id}/workers/subdomain")
@@ -179,23 +285,54 @@ def deploy(
 # ── Main ─────────────────────────────────────────────────────
 
 def main() -> None:
+    global _oauth_state, _oauth_code_verifier
+
     print()
     print("╔══════════════════════════════════════╗")
     print("║       XrayMOD Cloudflare Deployer    ║")
     print("╚══════════════════════════════════════╝")
     print()
     print("This will deploy the XrayMOD panel to your Cloudflare account.")
-    print("You need a Cloudflare API token with these permissions:")
-    print("  - Account: Workers Scripts: Edit")
-    print("  - Account: D1: Edit")
+    print("You'll be asked to authorize via Cloudflare — no API token needed.")
     print()
 
-    # Get inputs
-    token = _input("Cloudflare API token")
-    if not token:
-        print("\nError: API token is required.")
+    # Start OAuth server
+    server = _start_oauth_server()
+
+    # Generate PKCE values
+    _oauth_state = _gen_state()
+    _oauth_code_verifier = _gen_verifier()
+    challenge = _gen_challenge(_oauth_code_verifier)
+
+    # Build OAuth URL
+    auth_url = OAUTH_AUTH_URL + "?" + urlencode({
+        "client_id": OAUTH_CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": f"http://localhost:{OAUTH_REDIRECT_PORT}/callback",
+        "scope": " ".join(OAUTH_SCOPES),
+        "state": _oauth_state,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    })
+
+    # Open browser
+    print("  Opening Cloudflare authorization page...")
+    print(f"  If the browser doesn't open, visit:\n  {auth_url}\n")
+    webbrowser.open(auth_url)
+
+    # Wait for callback
+    print("  Waiting for authorization...")
+    _oauth_event.wait(timeout=120)
+    server.shutdown()
+
+    if not _oauth_result.get("ok"):
+        print(f"\n❌ Authorization failed: {_oauth_result.get('error', 'Unknown error')}")
         sys.exit(1)
 
+    token = _oauth_result["token"]
+    print("  ✓ Authorized successfully!\n")
+
+    # Get config
     worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
     d1_name = _input("D1 database name", f"{worker_name}-db")
     admin_password = _input("Admin password (empty = auto-generate)", "")
