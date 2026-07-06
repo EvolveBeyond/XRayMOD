@@ -34,7 +34,7 @@ XrayMOD یک پنل مدیریت پروکسی سرورلس است که به‌ط
 این دستور را اجرا کنید — نیازی به کلون کل پروژه نیست:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/install.sh)
 ```
 
 نصب‌کننده:

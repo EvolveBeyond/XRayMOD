@@ -22,7 +22,7 @@ from urllib.parse import quote
 import httpx
 
 CF_API = "https://api.cloudflare.com/client/v4"
-PANEL_GITHUB = "https://raw.githubusercontent.com/EvolveBeyond/XRayMOD"
+PANEL_GITHUB = "https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main"
 
 # ── Helpers ──────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ def _generate_password(length: int = 16) -> str:
 
 def fetch_panel_code() -> str:
     """Download the bundled worker script from GitHub."""
-    url = f"{PANEL_GITHUB}/main/worker/index.ts"
+    url = f"{PANEL_GITHUB}/worker/index.ts"
     print(f"  Downloading panel code...")
     resp = httpx.get(url, timeout=30, follow_redirects=True)
     if resp.status_code != 200:

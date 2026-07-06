@@ -69,7 +69,7 @@ async function cfFetch(
 }
 
 async function fetchPanelCode(): Promise<string> {
-  const githubUrl = 'https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/worker/index.ts';
+  const githubUrl = 'https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/worker/index.ts';
 
   try {
     const res = await fetch(githubUrl);

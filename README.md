@@ -34,7 +34,7 @@ XrayMOD is a serverless proxy management panel that runs entirely on Cloudflare 
 Run this single command — no need to clone the repository:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/install.sh)
 ```
 
 The installer will:

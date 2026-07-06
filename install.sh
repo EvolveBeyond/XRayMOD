@@ -3,7 +3,7 @@
 # Downloads and runs the Python installer via uv.
 #
 # Usage:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/install.sh)
 #
 set -euo pipefail
 
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-INSTALLER_URL="https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/installer/install.py"
+INSTALLER_URL="https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/installer/install.py"
 INSTALLER_DIR="${HOME}/.xraymod"
 INSTALLER_PY="${INSTALLER_DIR}/install.py"
 
