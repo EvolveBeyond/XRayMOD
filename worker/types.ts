@@ -1,6 +1,6 @@
 export interface Env {
   DB: D1Database;
-  ASSETS: { fetch: (request: Request) => Promise<Response> };
+  ASSETS?: { fetch: (request: Request) => Promise<Response> };
   ENABLE_TELEGRAM: string;
   ENABLE_TON_WALLET: string;
   EXTERNAL_SERVER_URL: string;
