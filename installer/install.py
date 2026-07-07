@@ -204,6 +204,7 @@ def deploy(
 
     # Step 5: Upload worker
     print("\n[5/6] Uploading worker...")
+    panel_code = fetch_panel_code()
     metadata = {
         "main_module": "worker.js",
         "compatibility_date": "2025-01-01",
