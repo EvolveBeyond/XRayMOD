@@ -4,7 +4,7 @@
 # ///
 """
 XrayMOD Installer — Stage 2 (Python / uv)
-Deploys the XrayMOD panel to a Cloudflare account.
+Deploys or updates the XrayMOD panel to a Cloudflare account.
 
 Usage (called by install.sh):
     uv run install.py
@@ -13,15 +13,35 @@ Usage (called by install.sh):
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import sys
 import webbrowser
+from pathlib import Path
 
 import httpx
 
 CF_API = "https://api.cloudflare.com/client/v4"
 PANEL_GITHUB = "https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main"
 TOKEN_CREATE_URL = "https://dash.cloudflare.com/profile/api-tokens"
+CONFIG_DIR = Path.home() / ".xraymod"
+CONFIG_FILE = CONFIG_DIR / "config.json"
+
+# ── Config persistence ────────────────────────────────────────
+
+def load_config() -> dict:
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def save_config(config: dict):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+
 
 # ── Helpers ──────────────────────────────────────────────────
 
@@ -60,7 +80,12 @@ def fetch_panel_code() -> str:
 
 # ── Deploy ───────────────────────────────────────────────────
 
-def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> dict:
+def deploy(
+    token: str,
+    worker_name: str,
+    d1_name: str,
+    admin_password: str,
+) -> dict:
     # Step 1: Get account ID
     print("\n[1/5] Finding Cloudflare account...")
     accounts = _cf(token, "/accounts?per_page=1")
@@ -68,13 +93,12 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
     account_id = account["id"]
     print(f"  ✓ Account: {account['name']} ({account_id})")
 
-    # Step 2: Create D1 database
-    print("\n[2/5] Creating D1 database...")
+    # Step 2: Create or find D1 database
+    print("\n[2/5] Setting up D1 database...")
+    d1_id = None
     try:
         d1 = _cf(token, f"/accounts/{account_id}/d1/database", "POST", {"name": d1_name})
         d1_id = d1["result"].get("uuid") or d1["result"].get("id")
-        if not d1_id:
-            raise RuntimeError(f"No ID in response: {d1}")
         print(f"  ✓ Database created: {d1_name} ({d1_id})")
     except RuntimeError:
         existing = _cf(token, f"/accounts/{account_id}/d1/database?name={d1_name}")
@@ -90,8 +114,7 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
 
     # Step 4: Upload worker
     print("\n[4/5] Uploading worker...")
-    # PAGES_URL points to the GitHub Pages hosted frontend
-    pages_url = "https://evolvebeyond.github.io/XRayMOD"
+    pages_url = f"{PANEL_GITHUB}"
     metadata = {
         "main_module": "worker.js",
         "compatibility_date": "2025-01-01",
@@ -135,14 +158,11 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
 
     # Step 5: Enable workers.dev subdomain
     print("\n[5/5] Enabling workers.dev subdomain...")
-
-    # Ensure the account has a workers.dev subdomain
     subdomain = "workers.dev"
     try:
         sub = _cf(token, f"/accounts/{account_id}/workers/subdomain")
         subdomain = sub["result"].get("subdomain") or sub["result"].get("name") or "workers.dev"
     except RuntimeError:
-        # Try to set the subdomain
         for method in ("PUT", "POST", "PATCH"):
             try:
                 sub = _cf(token, f"/accounts/{account_id}/workers/subdomain", method, {"subdomain": f"xraymod-{secrets.token_hex(4)}"})
@@ -176,39 +196,59 @@ def deploy(token: str, worker_name: str, d1_name: str, admin_password: str) -> d
 # ── Main ─────────────────────────────────────────────────────
 
 def main() -> None:
+    # Load previous config
+    config = load_config()
+    prev_token = config.get("api_token", "")
+    prev_worker = config.get("worker_name", "")
+
     print()
     print("╔══════════════════════════════════════╗")
     print("║       XrayMOD Cloudflare Deployer    ║")
     print("╚══════════════════════════════════════╝")
     print()
-    print("This will deploy the XrayMOD panel to your Cloudflare account.")
+    print("This will deploy or update the XrayMOD panel on your Cloudflare account.")
     print()
 
-    # Guide user to create API token
-    print("  ┌─────────────────────────────────────────────────────┐")
-    print("  │ Step 1: Create a Cloudflare API Token              │")
-    print("  │                                                     │")
-    print("  │ I'll open the token creation page in your browser. │")
-    print("  │ Click 'Create Token' and use this template:        │")
-    print("  │   - Account > Workers Scripts > Edit               │")
-    print("  │   - Account > D1 > Edit                            │")
-    print("  │                                                     │")
-    print("  │ Copy the token and paste it below.                 │")
-    print("  └─────────────────────────────────────────────────────┘")
-    print()
-
-    open_page = input("  Open token creation page? [Y/n] ").strip().lower()
-    if open_page != "n":
-        webbrowser.open(TOKEN_CREATE_URL)
-        print(f"  ✓ Opened: {TOKEN_CREATE_URL}")
+    # Step 1: API Token
+    if prev_token:
+        print(f"  Found previous API token: {prev_token[:8]}...")
+        use_prev = _input("Use this token? [Y/n]", "y").lower()
+        if use_prev in ("y", "yes", ""):
+            token = prev_token
+        else:
+            print()
+            print("  Open token creation page to create a new token.")
+            print("  Required permissions:")
+            print("    - Account > Workers Scripts > Edit")
+            print("    - Account > D1 > Edit")
+            webbrowser.open(TOKEN_CREATE_URL)
+            token = _input("Paste your API token")
+    else:
+        print("  ┌─────────────────────────────────────────────────────┐")
+        print("  │ Step 1: Create a Cloudflare API Token              │")
+        print("  │                                                     │")
+        print("  │ I'll open the token creation page in your browser. │")
+        print("  │ Click 'Create Token' and use this template:        │")
+        print("  │   - Account > Workers Scripts > Edit               │")
+        print("  │   - Account > D1 > Edit                            │")
+        print("  │                                                     │")
+        print("  │ Copy the token and paste it below.                 │")
+        print("  └─────────────────────────────────────────────────────┘")
         print()
 
-    token = _input("Paste your API token")
+        open_page = _input("Open token creation page? [Y/n]", "y").lower()
+        if open_page != "n":
+            webbrowser.open(TOKEN_CREATE_URL)
+            print(f"  ✓ Opened: {TOKEN_CREATE_URL}")
+            print()
+
+        token = _input("Paste your API token")
+
     if not token:
         print("\n  Error: Token is required.")
         sys.exit(1)
 
-    # Verify token works
+    # Verify token
     print("\n  Verifying token...")
     try:
         accounts = _cf(token, "/accounts?per_page=1")
@@ -221,7 +261,17 @@ def main() -> None:
         print("    - Account > D1 > Edit")
         sys.exit(1)
 
-    worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
+    # Step 2: Worker name
+    if prev_worker:
+        print(f"\n  Found previous worker: {prev_worker}")
+        use_prev = _input("Update this worker? [Y/n]", "y").lower()
+        if use_prev in ("y", "yes", ""):
+            worker_name = prev_worker
+        else:
+            worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
+    else:
+        worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
+
     d1_name = _input("D1 database name", f"{worker_name}-db")
     admin_password = _input("Admin password (empty = auto-generate)", "")
 
@@ -245,17 +295,25 @@ def main() -> None:
         print(f"\n  ❌ Deployment failed: {e}")
         sys.exit(1)
 
+    # Save config for next time
+    save_config({
+        "api_token": token,
+        "worker_name": worker_name,
+        "d1_name": d1_name,
+        "worker_url": result["worker_url"],
+    })
+
     print()
     print("═══════════════════════════════════════")
     print("  ✅ Deployment successful!")
     print("═══════════════════════════════════════")
     print()
-    print(f"  Panel URL:   {result['worker_url']}")
+    print(f"  Panel URL:   {result['worker_url']}/install")
     print(f"  Admin user:  admin")
     print(f"  Admin pass:  {result['admin_password']}")
     print(f"  Database:    {result['d1_database']}")
     print()
-    print("  Open the panel URL to get started.")
+    print("  Open the panel URL to set your admin password.")
     print()
 
 

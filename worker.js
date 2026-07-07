@@ -331,6 +331,266 @@ async function requireAdmin(request, db) {
   return session;
 }
 
+// worker/install.ts
+async function handleInstall(request, env, _ctx, _params) {
+  const url = new URL(request.url);
+  const configured = await env.DB.prepare(
+    "SELECT v FROM kvstore WHERE k = ?"
+  ).bind("panel.password_hash").first();
+  if (configured && configured.v) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "/" }
+    });
+  }
+  if (request.method === "POST") {
+    try {
+      const body = await request.json();
+      const password = body.password;
+      if (!password || password.length < 4) {
+        return new Response(JSON.stringify({ error: "Password must be at least 4 characters" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      const hash = await hashPassword2(password);
+      await env.DB.prepare(
+        "INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)"
+      ).bind("panel.password_hash", hash, Date.now()).run();
+      await env.DB.prepare(
+        "UPDATE users SET password_hash = ? WHERE role = ?"
+      ).bind(hash, "admin").run();
+      return new Response(JSON.stringify({ success: true, message: "Password set successfully" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: "Invalid request" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XrayMOD \u2014 Setup</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #09090b;
+      color: #fafafa;
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #18181b;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 2.5rem;
+      max-width: 440px;
+      width: 100%;
+    }
+    .logo {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.5rem;
+      color: #000;
+      margin: 0 auto 1.5rem;
+    }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      text-align: center;
+      color: #a1a1aa;
+      margin-bottom: 2rem;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #09090b;
+      border: 1px solid #27272a;
+      border-radius: 0.75rem;
+      color: #fafafa;
+      font-size: 0.875rem;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+    input::placeholder { color: #52525b; }
+    .btn {
+      width: 100%;
+      padding: 0.875rem;
+      background: #10b981;
+      color: #000;
+      border: none;
+      border-radius: 0.75rem;
+      font-weight: 700;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 1rem;
+    }
+    .btn:hover { background: #34d399; }
+    .btn:disabled { background: #27272a; color: #52525b; cursor: not-allowed; }
+    .error {
+      color: #ef4444;
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+    .success {
+      color: #10b981;
+      font-size: 0.875rem;
+      margin-top: 1rem;
+      text-align: center;
+      display: none;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #52525b;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">X</div>
+    <h1>Welcome to XrayMOD</h1>
+    <p class="subtitle">
+      Set up your admin password to get started.<br>
+      This is the only time you'll need to do this.
+    </p>
+
+    <form id="setupForm">
+      <div class="form-group">
+        <label for="password">Admin Password</label>
+        <input
+          type="password"
+          id="password"
+          placeholder="Enter a secure password"
+          required
+          minlength="4"
+          autocomplete="new-password"
+        >
+      </div>
+      <div class="form-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input
+          type="password"
+          id="confirmPassword"
+          placeholder="Confirm your password"
+          required
+          minlength="4"
+          autocomplete="new-password"
+        >
+      </div>
+      <button type="submit" class="btn" id="submitBtn">Complete Setup</button>
+    </form>
+
+    <div class="error" id="error"></div>
+    <div class="success" id="success"></div>
+
+    <div class="footer">
+      Powered by XrayMOD \u2014 Cloudflare Workers
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('setupForm');
+    const error = document.getElementById('error');
+    const success = document.getElementById('success');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirmPassword').value;
+
+      if (password !== confirm) {
+        error.textContent = 'Passwords do not match';
+        error.style.display = 'block';
+        return;
+      }
+
+      if (password.length < 4) {
+        error.textContent = 'Password must be at least 4 characters';
+        error.style.display = 'block';
+        return;
+      }
+
+      error.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Setting up...';
+
+      try {
+        const res = await fetch('/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          success.textContent = 'Setup complete! Redirecting to login...';
+          success.style.display = 'block';
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1500);
+        } else {
+          error.textContent = data.error || 'Setup failed';
+          error.style.display = 'block';
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Complete Setup';
+        }
+      } catch (err) {
+        error.textContent = 'Network error. Please try again.';
+        error.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Complete Setup';
+      }
+    });
+  <\/script>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 200,
+    headers: { "Content-Type": "text/html; charset=utf-8" }
+  });
+}
+
 // worker/api/login.ts
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -1235,6 +1495,10 @@ function notFound() {
 var routes = [
   // Public routes
   {
+    pattern: new URLPattern({ pathname: "/install" }),
+    handler: handleInstall
+  },
+  {
     pattern: new URLPattern({ pathname: "/api/login" }),
     handler: handleLogin
   },
@@ -1302,6 +1566,17 @@ async function handleRequest(request, env, ctx) {
   ctx.waitUntil(ensureSchema(env.DB));
   if (request.headers.get("Upgrade") === "websocket") {
     return handleProxyTraffic(request, env, ctx);
+  }
+  if (!url.pathname.startsWith("/install") && !url.pathname.startsWith("/api/health")) {
+    const configured = await env.DB.prepare(
+      "SELECT v FROM kvstore WHERE k = ?"
+    ).bind("panel.password_hash").first();
+    if (!configured || !configured.v) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/install" }
+      });
+    }
   }
   for (const route of routes) {
     const match = route.pattern.exec(url);

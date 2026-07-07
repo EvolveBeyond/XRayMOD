@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { ensureSchema } from './schema';
+import { handleInstall } from './install';
 import { handleLogin } from './api/login';
 import { handleLogout } from './api/logout';
 import { handleHealth } from './api/health';
@@ -41,6 +42,10 @@ function notFound(): Response {
 
 const routes: Route[] = [
   // Public routes
+  {
+    pattern: new URLPattern({ pathname: '/install' }),
+    handler: handleInstall,
+  },
   {
     pattern: new URLPattern({ pathname: '/api/login' }),
     handler: handleLogin,
@@ -120,6 +125,23 @@ export async function handleRequest(
   // Check for WebSocket upgrade (proxy traffic)
   if (request.headers.get('Upgrade') === 'websocket') {
     return handleProxyTraffic(request, env, ctx);
+  }
+
+  // Check if panel is configured (redirect to /install if not)
+  if (!url.pathname.startsWith('/install') && !url.pathname.startsWith('/api/health')) {
+    const configured = await env.DB.prepare(
+      'SELECT v FROM kvstore WHERE k = ?'
+    )
+      .bind('panel.password_hash')
+      .first<{ v: string }>();
+
+    if (!configured || !configured.v) {
+      // Not configured, redirect to /install
+      return new Response(null, {
+        status: 302,
+        headers: { Location: '/install' },
+      });
+    }
   }
 
   // Try matching API routes
