@@ -251,12 +251,17 @@ def deploy(
     subdomain = "workers.dev"
     try:
         sub = _cf(token, f"/accounts/{account_id}/workers/subdomain")
-        subdomain = sub["result"].get("subdomain") or sub["result"].get("name") or "workers.dev"
+        # API returns just the custom part (e.g. "rhpcir"), need to append ".workers.dev"
+        custom_sub = sub["result"].get("subdomain") or sub["result"].get("name") or ""
+        if custom_sub:
+            subdomain = f"{custom_sub}.workers.dev"
     except RuntimeError:
         for method in ("PUT", "POST", "PATCH"):
             try:
                 sub = _cf(token, f"/accounts/{account_id}/workers/subdomain", method, {"subdomain": f"xraymod-{secrets.token_hex(4)}"})
-                subdomain = sub["result"].get("subdomain") or "workers.dev"
+                custom_sub = sub["result"].get("subdomain") or ""
+                if custom_sub:
+                    subdomain = f"{custom_sub}.workers.dev"
                 break
             except RuntimeError:
                 continue
