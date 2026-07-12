@@ -40,42 +40,38 @@ XrayMOD is a **serverless, self-hosted proxy management panel** that runs entire
 
 ### Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                     Cloudflare CDN                       │
-├──────────────────────────────────────────────────────────┤
-│                    Cloudflare Worker                     │
-│                                                          │
-│  Request Flow:                                           │
-│  ┌─────────────────────────────────────────────────────┐ │
-│  │ 1. UUID Check                                        │ │
-│  │    ├── No UUID set → redirect to /install            │ │
-│  │    ├── Wrong/missing UUID → Error 1101 page          │ │
-│  │    └── Correct UUID → strip prefix, continue         │ │
-│  ├─────────────────────────────────────────────────────┤ │
-│  │ 2. Route Matching                                    │ │
-│  │    ├── /api/* → REST API handlers                    │ │
-│  │    ├── /sub/:token → subscription links              │ │
-│  │    ├── WebSocket → proxy traffic                     │ │
-│  │    └── Static SPA (from Pages)                       │ │
-│  ├─────────────────────────────────────────────────────┤ │
-│  │ 3. Disguise Fallback                                 │ │
-│  │    └── Unrecognized paths → Error 1101 page          │ │
-│  └─────────────────────────────────────────────────────┘ │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
-│  │ React SPA│  │ REST API │  │    Proxy Handler      │   │
-│  │ (Static) │  │ (Router) │  │  (WS/gRPC/XHTTP)     │   │
-│  └──────────┘  └──────────┘  └──────────────────────┘   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐   │
-│  │ Disguise │  │ TG Bot   │  │   Clean IP System     │   │
-│  │  System  │  │ Webhook  │  │   ISP Detection       │   │
-│  └──────────┘  └──────────┘  └──────────────────────┘   │
-├──────────────────────────────────────────────────────────┤
-│               Cloudflare D1 Database                     │
-│          (users, protocols, configs, kvstore)            │
-└──────────────────────────────────────────────────────────┘
-```
+**Cloudflare CDN → Cloudflare Worker → D1 Database**
+
+#### Request Flow
+
+1. **UUID Check**
+   - No UUID set → redirect to `/install`
+   - Wrong/missing UUID → Error 1101 page
+   - Correct UUID → strip prefix, continue
+
+2. **Route Matching**
+   - `/api/*` → REST API handlers
+   - `/sub/:token` → subscription links
+   - WebSocket → proxy traffic
+   - Static SPA (from Pages)
+
+3. **Disguise Fallback**
+   - Unrecognized paths → Error 1101 page
+
+#### Worker Modules
+
+| Module | Description |
+|--------|-------------|
+| React SPA (Static) | Frontend dashboard |
+| REST API (Router) | API route handlers |
+| Proxy Handler | WS / gRPC / XHTTP transport |
+| Disguise System | Error 1101 bypass |
+| TG Bot Webhook | Telegram bot handler |
+| Clean IP System | ISP detection + IP optimization |
+
+#### Storage
+
+- **Cloudflare D1 Database** — users, protocols, configs, kvstore
 
 ### The UUID Access System
 
@@ -118,13 +114,11 @@ The installer handles everything:
 
 After installation, you'll receive:
 
-```
-╔══════════════════════════════════════════════════════╗
-║  Panel URL:   https://xxx.workers.dev/a1b2c3d4-...  ║
-║  Admin user:  admin                                  ║
-║  Admin pass:  (your chosen password)                 ║
-╚══════════════════════════════════════════════════════╝
-```
+| Item | Value |
+|------|-------|
+| Panel URL | `https://xxx.workers.dev/a1b2c3d4-...` |
+| Admin user | `admin` |
+| Admin pass | *(your chosen password)* |
 
 **Save this URL!** It is the only way to access your panel. The UUID part (`a1b2c3d4-...`) is your secret — never share it.
 
