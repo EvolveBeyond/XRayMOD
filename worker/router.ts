@@ -11,6 +11,7 @@ import { handleConfigs } from './api/configs';
 import { handleSettings } from './api/settings';
 import { handleCleanIP } from './api/cleanip';
 import { handleBackends } from './api/backends';
+import { handleWizard } from './api/wizard';
 import { handleSubscription } from './subscription';
 import { handleProxyTraffic } from './proxy';
 import { getDisguiseConfig, remapDisguisePath, getDecoyResponse } from './disguise';
@@ -48,6 +49,10 @@ const routes: Route[] = [
   { pattern: new URLPattern({ pathname: '/api/cleanip/:action' }), handler: handleCleanIP },
   { pattern: new URLPattern({ pathname: '/api/backends' }), handler: handleBackends },
   { pattern: new URLPattern({ pathname: '/api/backends/:id' }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: '/api/wizard' }), handler: handleWizard },
+  { pattern: new URLPattern({ pathname: '/api/wizard/:action' }), handler: handleWizard },
+  { pattern: new URLPattern({ pathname: '/api/wizard' }), handler: handleWizard },
+  { pattern: new URLPattern({ pathname: '/api/wizard/:action' }), handler: handleWizard },
   { pattern: new URLPattern({ pathname: '/bot' }), handler: handleTelegramWebhook },
   { pattern: new URLPattern({ pathname: '/admin' }), handler: handleTelegramLogin },
   { pattern: new URLPattern({ pathname: '/sub/:token' }), handler: handleSubscription },

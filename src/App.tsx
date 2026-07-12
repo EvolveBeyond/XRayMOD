@@ -395,6 +395,9 @@ export default function App() {
   const [backendIP, setBackendIP] = useState('');
   const [backendPort, setBackendPort] = useState('443');
 
+  // First Login Initial Config
+  const [initialConfig, setInitialConfig] = useState<any>(null);
+
   const handleConfigValueChange = (name: string, value: any) => {
     setConfigFormValues(prev => ({ ...prev, [name]: value }));
   };
@@ -555,7 +558,7 @@ export default function App() {
   };
 
   if (!isLoggedIn) {
-    return <LoginScreen onLogin={(assignedRole, profile) => {
+    return <LoginScreen onLogin={(assignedRole, profile, initCfg) => {
       setRole(assignedRole);
       setUserProfile({
         displayName: profile.username,
@@ -564,6 +567,7 @@ export default function App() {
       });
       setIsLoggedIn(true);
       setActiveTab('dashboard');
+      if (initCfg) setInitialConfig(initCfg);
     }} />;
   }
 
@@ -571,6 +575,60 @@ export default function App() {
     <div className="dark min-h-screen bg-zinc-950 text-zinc-100 selection:bg-emerald-500/30 font-sans">
       {/* Navigation Rail / Sidebar (Mobile Bottom, Desktop Left) */}
       <Toaster position="top-right" theme="dark" />
+
+      {/* First Login Welcome Dialog */}
+      <Dialog open={!!initialConfig} onOpenChange={() => setInitialConfig(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black flex items-center gap-2">
+              <div className="bg-emerald-500 p-2 rounded-xl"><Zap className="text-black w-5 h-5" /></div>
+              Welcome to XrayMOD
+            </DialogTitle>
+            <DialogDescription>Your panel is ready. Save this information — it is the only way to access your panel.</DialogDescription>
+          </DialogHeader>
+          {initialConfig && (
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Panel URL</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-zinc-950 rounded-lg text-xs text-emerald-400 font-mono break-all">{initialConfig.panelUrl}</code>
+                  <Button variant="outline" className="border-zinc-800 shrink-0" onClick={() => { navigator.clipboard.writeText(initialConfig.panelUrl); toast.success('Copied!'); }}>
+                    <Copy size={14} />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Subscription URL</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-zinc-950 rounded-lg text-xs text-blue-400 font-mono break-all">{initialConfig.subscriptionUrl}</code>
+                  <Button variant="outline" className="border-zinc-800 shrink-0" onClick={() => { navigator.clipboard.writeText(initialConfig.subscriptionUrl); toast.success('Copied!'); }}>
+                    <Copy size={14} />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Admin UUID</Label>
+                <code className="block p-3 bg-zinc-950 rounded-lg text-xs text-zinc-400 font-mono">{initialConfig.adminUuid}</code>
+              </div>
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2">
+                <p className="text-xs font-bold text-emerald-400">Next Steps:</p>
+                <ul className="text-[11px] text-zinc-400 space-y-1">
+                  {initialConfig.instructions?.map((inst: string, i: number) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">{i + 1}.</span>
+                      {inst}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-500 font-bold" onClick={() => setInitialConfig(null)}>
+                I've Saved This — Let's Go
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-col md:flex-row min-h-screen">
         
         {/* Desktop Sidebar */}
@@ -2324,7 +2382,7 @@ function UserStat({ icon: Icon, label, value }: any) {
   );
 }
 
-function LoginScreen({ onLogin }: { onLogin: (role: 'admin' | 'user', userProfile: any) => void }) {
+function LoginScreen({ onLogin }: { onLogin: (role: 'admin' | 'user', userProfile: any, initialConfig?: any) => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -2341,9 +2399,9 @@ function LoginScreen({ onLogin }: { onLogin: (role: 'admin' | 'user', userProfil
         credentials: 'include',
       });
       
-      const data = await res.json() as { success: boolean; role?: string; user?: any; message?: string };
+      const data = await res.json() as { success: boolean; role?: string; user?: any; message?: string; initialConfig?: any };
       if (data.success) {
-        onLogin(data.role as 'admin' | 'user', data.user);
+        onLogin(data.role as 'admin' | 'user', data.user, data.initialConfig);
       } else {
         toast.error(data.message || 'Login failed');
       }

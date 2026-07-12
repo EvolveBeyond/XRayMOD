@@ -64,7 +64,13 @@ export async function handleSettings(
       .bind('tg.%')
       .all<{ k: string; v: string }>();
 
-    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results];
+    const rows8 = await env.DB.prepare(
+      'SELECT k, v FROM kvstore WHERE k LIKE ?'
+    )
+      .bind('wizard.%')
+      .all<{ k: string; v: string }>();
+
+    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results, ...rows8.results];
     const settings: Record<string, any> = {};
     for (const row of all) {
       settings[row.k] = row.v;

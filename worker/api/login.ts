@@ -48,6 +48,35 @@ export async function handleLogin(
 
     const sessionToken = await createSession(env.DB, user.id, user.role);
 
+    // Check if first login
+    const firstLoginRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('panel.first_login_done').first<{ v: string }>();
+    const isFirstLogin = !firstLoginRow?.v || firstLoginRow.v !== 'true';
+
+    let initialConfig: any = null;
+    if (isFirstLogin && user.role === 'admin') {
+      const url = new URL(request.url);
+      const accessUUID = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('panel.access_uuid').first<{ v: string }>();
+      const adminUser = await env.DB.prepare('SELECT uuid FROM users WHERE role = ?').bind('admin').first<{ uuid: string }>();
+
+      initialConfig = {
+        panelUrl: `${url.protocol}//${url.host}/${accessUUID?.v || ''}`,
+        subscriptionUrl: `${url.protocol}//${url.host}/sub/${adminUser?.uuid || ''}`,
+        adminUuid: adminUser?.uuid || '',
+        accessUuid: accessUUID?.v || '',
+        instructions: [
+          'Save your Panel URL — this is the only way to access your panel',
+          'Share the Subscription URL with clients to connect',
+          'Install a client app (V2RayNG, sing-box, Clash) and import the subscription',
+          'Go to Settings to configure protocols, ECH, clean IPs, and Telegram bot',
+        ],
+      };
+
+      // Mark first login done
+      await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+        .bind('panel.first_login_done', 'true', Date.now())
+        .run();
+    }
+
     return json(
       {
         success: true,
@@ -57,6 +86,7 @@ export async function handleLogin(
           username: user.username,
           email: user.email,
         },
+        ...(initialConfig ? { initialConfig } : {}),
       },
       200,
       { 'Set-Cookie': setSessionCookie(sessionToken) }

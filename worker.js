@@ -684,16 +684,25 @@ async function handleLogin(request, env, _ctx, _params) {
       return json({ success: false, message: "Invalid credentials" }, 401);
     }
     const sessionToken = await createSession(env.DB, user.id, user.role);
+    // Check first login
+    const firstLoginRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("panel.first_login_done").first();
+    const isFirstLogin = !firstLoginRow?.v || firstLoginRow.v !== "true";
+    let initialConfig = null;
+    if (isFirstLogin && user.role === "admin") {
+      const url = new URL(request.url);
+      const accessUUID = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("panel.access_uuid").first();
+      const adminUser = await env.DB.prepare("SELECT uuid FROM users WHERE role = ?").bind("admin").first();
+      initialConfig = {
+        panelUrl: `${url.protocol}//${url.host}/${accessUUID?.v || ""}`,
+        subscriptionUrl: `${url.protocol}//${url.host}/sub/${adminUser?.uuid || ""}`,
+        adminUuid: adminUser?.uuid || "",
+        accessUuid: accessUUID?.v || "",
+        instructions: ["Save your Panel URL — this is the only way to access your panel", "Share the Subscription URL with clients to connect", "Install a client app (V2RayNG, sing-box, Clash) and import the subscription", "Go to Settings to configure protocols, ECH, clean IPs, and Telegram bot"],
+      };
+      await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("panel.first_login_done", "true", Date.now()).run();
+    }
     return json(
-      {
-        success: true,
-        role: user.role,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email
-        }
-      },
+      { success: true, role: user.role, user: { id: user.id, username: user.username, email: user.email }, ...(initialConfig ? { initialConfig } : {}) },
       200,
       { "Set-Cookie": setSessionCookie(sessionToken) }
     );
@@ -1083,7 +1092,10 @@ async function handleSettings(request, env, _ctx, _params) {
     const rows7 = await env.DB.prepare(
       "SELECT k, v FROM kvstore WHERE k LIKE ?"
     ).bind("tg.%").all();
-    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results];
+    const rows8 = await env.DB.prepare(
+      "SELECT k, v FROM kvstore WHERE k LIKE ?"
+    ).bind("wizard.%").all();
+    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results, ...rows8.results];
     const settings = {};
     for (const row of all) {
       settings[row.k] = row.v;
@@ -1260,6 +1272,65 @@ async function handleBackends(request, env, _ctx, params) {
     return jsonResponse({ success: true });
   }
   return jsonResponse({ success: false, message: "Not allowed" }, 405);
+}
+
+// --- Wizard API ---
+async function handleWizard(request, env, _ctx, params) {
+  if (request.method === "GET") {
+    const wizardKey = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("wizard.api_key").first();
+    return jsonResponse({ success: true, data: { configured: !!wizardKey?.v } });
+  }
+  if (request.method === "POST" && params.action === "setup") {
+    const authHeader = request.headers.get("Authorization") || "";
+    const token = authHeader.replace("Bearer ", "");
+    try {
+      const accounts = await cfCall(token, "/accounts?per_page=1");
+      if (!accounts.length) throw new Error("No accounts found");
+      await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("wizard.api_key", token, Date.now()).run();
+      return jsonResponse({ success: true, data: { accountName: accounts[0].name, accountId: accounts[0].id } });
+    } catch (e) { return jsonResponse({ success: false, message: e.message || "Invalid API key" }, 400); }
+  }
+  if (request.method === "POST" && params.action === "deploy") {
+    try {
+      const body = await request.json();
+      const savedKey = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("wizard.api_key").first();
+      const cfToken = body.cfToken || savedKey?.v;
+      if (!cfToken) return jsonResponse({ success: false, message: "No API key" }, 400);
+      const accounts = await cfCall(cfToken, "/accounts?per_page=1");
+      if (!accounts.length) throw new Error("No accounts found");
+      const accountId = body.accountId || accounts[0].id;
+      const projectName = body.projectName || `cf-${Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2, "0")).join("")}`;
+      const adminPassword = body.adminPassword || Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, "0")).join("");
+      const logs = [];
+      logs.push(`[${new Date().toLocaleTimeString()}] Creating D1 database...`);
+      const d1 = await cfCall(cfToken, `/accounts/${accountId}/d1/database`, "POST", { name: `${projectName}-db` });
+      logs.push(`[${new Date().toLocaleTimeString()}] Database created: ${d1.uuid || d1.id}`);
+      logs.push(`[${new Date().toLocaleTimeString()}] Downloading worker code...`);
+      const workerCode = await fetch("https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/worker.js").then(r => r.text());
+      logs.push(`[${new Date().toLocaleTimeString()}] Deploying worker...`);
+      const formData = new FormData();
+      formData.append("metadata", new Blob([JSON.stringify({ main_module: "worker.js", compatibility_date: "2025-01-01", compatibility_flags: ["nodejs_compat"], bindings: [{ type: "plain_text", name: "ADMIN_PASSWORD", text: adminPassword }, { type: "plain_text", name: "DISGUISE_PAGE", text: "1101" }] })], { type: "application/json" }), "metadata.json");
+      formData.append("worker.js", new Blob([workerCode], { type: "application/javascript+module" }), "worker.js");
+      const uploadR = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${projectName}`, { method: "PUT", headers: { "Authorization": `Bearer ${cfToken}` }, body: formData });
+      const uploadData = await uploadR.json();
+      if (!uploadData.success) throw new Error(`Upload failed: ${(uploadData.errors || []).map(e => e.message).join("; ")}`);
+      logs.push(`[${new Date().toLocaleTimeString()}] Worker deployed`);
+      const workerUrl = `https://${projectName}.${accounts[0].subdomain || "workers.dev"}`;
+      logs.push(`[${new Date().toLocaleTimeString()}] Done!`);
+      return jsonResponse({ success: true, data: { projectName, d1Id: d1.uuid || d1.id, workerUrl, adminPassword, logs } });
+    } catch (e) { return jsonResponse({ success: false, message: e.message || "Deployment failed" }, 500); }
+  }
+  return jsonResponse({ success: false, message: "Not found" }, 404);
+}
+
+async function cfCall(token, path, method = "GET", body) {
+  const headers = { "Authorization": `Bearer ${token}`, "Accept": "application/json" };
+  const opts = { method, headers };
+  if (body) { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const r = await fetch(`https://api.cloudflare.com/client/v4${path}`, opts);
+  const data = await r.json();
+  if (!data.success) throw new Error((data.errors || []).map(e => e.message).join("; ") || "CF API failed");
+  return data.result;
 }
 
 // worker/subscription.ts
@@ -1683,6 +1754,8 @@ var routes = [
   { pattern: new URLPattern({ pathname: "/api/cleanip/:action" }), handler: handleCleanIP },
   { pattern: new URLPattern({ pathname: "/api/backends" }), handler: handleBackends },
   { pattern: new URLPattern({ pathname: "/api/backends/:id" }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: "/api/wizard" }), handler: handleWizard },
+  { pattern: new URLPattern({ pathname: "/api/wizard/:action" }), handler: handleWizard },
   { pattern: new URLPattern({ pathname: "/bot" }), handler: handleTelegramWebhook },
   { pattern: new URLPattern({ pathname: "/admin" }), handler: handleTelegramLogin },
   { pattern: new URLPattern({ pathname: "/sub/:token" }), handler: handleSubscription }
