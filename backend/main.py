@@ -1,4 +1,4 @@
-"""XRayMOD Backend — FastAPI for VPS deployment."""
+"""XRayMOD Backend — FastAPI for VPS deployment with IOP middleware."""
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db
 from .routers import login, logout, users, nodes, configs, protocols, settings, health, cleanip, backends, wizard
+from .middleware import IOPMiddleware
 
 
 @asynccontextmanager
@@ -25,6 +26,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# IOP middleware — detects intent, runs processors
+app.add_middleware(IOPMiddleware)
 
 # Register all routers
 for r in [login, logout, health, users, nodes, configs, protocols, settings, cleanip, backends, wizard]:

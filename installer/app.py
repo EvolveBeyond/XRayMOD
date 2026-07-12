@@ -1,7 +1,6 @@
-"""XRayMOD Installer — FastAPI + WebUI."""
+"""XRayMOD Installer — FastAPI + WebUI with IOP pipeline."""
 from __future__ import annotations
 
-import json
 import secrets
 import webbrowser
 from pathlib import Path
@@ -11,8 +10,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import cf_api
-from .config import load, save
-from .deployer import deploy_cf, fetch_worker_code, generate_password
+from .config import load
+from .pipeline import deploy, verify_token, run_pipeline
+from .deployer import generate_password
 
 app = FastAPI(title="XRayMOD Installer")
 
@@ -40,20 +40,23 @@ async def status():
 
 
 @app.post("/api/verify-token")
-async def verify_token(request: Request):
+async def verify_token_endpoint(request: Request):
+    """IOP: runs only the verify_token processor."""
     body = await request.json()
     token = body.get("token", "").strip()
     if not token:
         return JSONResponse({"error": "Token is required"}, 400)
-    try:
-        account = cf_api.verify_token(token)
-        return {"valid": True, "account": account}
-    except cf_api.CFApiError as e:
-        return JSONResponse({"valid": False, "error": str(e)}, 400)
+
+    state = run_pipeline({"token": token}, [verify_token])
+    if "error" in state:
+        return JSONResponse({"valid": False, "error": state["error"]}, 400)
+
+    return {"valid": True, "account": state["account"]}
 
 
 @app.post("/api/deploy")
-async def deploy(request: Request):
+async def deploy_endpoint(request: Request):
+    """IOP: runs the full deployment pipeline."""
     body = await request.json()
     token = body.get("token", "").strip()
     worker_name = body.get("worker_name", f"cf-{secrets.token_hex(6)}")
@@ -64,7 +67,7 @@ async def deploy(request: Request):
         return JSONResponse({"error": "Token is required"}, 400)
 
     try:
-        result = deploy_cf(token, worker_name, d1_name, admin_password)
+        result = deploy(token, worker_name, d1_name, admin_password)
         return {"success": True, **result}
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
