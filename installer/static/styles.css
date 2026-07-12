@@ -26,6 +26,11 @@ input::placeholder{color:#52525b}
 .btn-primary{width:100%;padding:.875rem;background:#10b981;color:#000;border:none;border-radius:.75rem;font-weight:700;font-size:.875rem;cursor:pointer;transition:background .2s;margin-top:1rem}
 .btn-primary:hover{background:#34d399}
 .btn-primary:disabled{background:#27272a;color:#52525b;cursor:not-allowed}
+.btn-oauth{display:flex;align-items:center;justify-content:center;gap:.5rem;background:#f48120;color:#000}
+.btn-oauth:hover{background:#fbad41}
+.btn-icon{width:24px;height:24px;background:#000;color:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.7rem}
+.spinner-small{width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite}
+.check-icon{margin-right:.25rem}
 .btn-secondary{background:none;border:1px solid #27272a;color:#a1a1aa;padding:.625rem 1rem;border-radius:.75rem;font-size:.75rem;cursor:pointer;margin-bottom:1rem}
 .btn-secondary:hover{border-color:#10b981;color:#fafafa}
 .status-msg{font-size:.8rem;padding:.75rem;border-radius:.75rem;margin-bottom:1rem;display:none}

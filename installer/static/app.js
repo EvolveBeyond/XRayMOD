@@ -1,5 +1,6 @@
-// XRayMOD Installer — Frontend Logic
+// XRayMOD Installer — Frontend Logic with OAuth2
 let selectedMode = null;
+let accessToken = null;
 
 function show(id) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -19,48 +20,59 @@ function goBack() {
   show('step-welcome');
 }
 
-function openTokenPage() {
-  window.open('https://dash.cloudflare.com/profile/api-tokens', '_blank');
-}
-
 function setStatus(msg, ok) {
   const el = document.getElementById('token-status');
   el.className = 'status-msg ' + (ok ? 'ok' : 'err');
   el.textContent = msg;
 }
 
-let tokenValid = false;
+// ── OAuth2 Flow ─────────────────────────────────────────────
+async function connectCloudflare() {
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-small"></span> Connecting...';
 
-// Auto-verify token on blur
-document.addEventListener('DOMContentLoaded', () => {
-  const tokenInput = document.getElementById('apiToken');
-  tokenInput.addEventListener('blur', async () => {
-    const token = tokenInput.value.trim();
-    if (!token) return;
-    setStatus('Verifying token...', null);
-    try {
-      const res = await fetch('/api/verify-token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      });
-      const data = await res.json();
-      if (data.valid) {
-        setStatus('Token valid — ' + data.account.name, true);
-        tokenValid = true;
-        document.getElementById('deployBtn').disabled = false;
-      } else {
-        setStatus(data.error || 'Invalid token', false);
-        tokenValid = false;
-      }
-    } catch (e) {
-      setStatus('Network error', false);
+  try {
+    // Get OAuth URL
+    const res = await fetch('/api/oauth/url');
+    const data = await res.json();
+
+    // Open Cloudflare OAuth page
+    const authWindow = window.open(data.url, '_blank', 'width=600,height=700');
+
+    setStatus('Waiting for Cloudflare authorization...', null);
+
+    // Poll for completion
+    const pollRes = await fetch('/api/oauth/wait', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ timeout: 300 }),
+    });
+
+    const pollData = await pollRes.json();
+
+    if (pollData.success) {
+      accessToken = pollData.access_token;
+      document.getElementById('account-name').textContent = pollData.account.name;
+      document.getElementById('oauth-section').style.display = 'none';
+      document.getElementById('connected-section').style.display = 'block';
+      document.getElementById('deployBtn').disabled = false;
+      setStatus('Connected to ' + pollData.account.name, true);
+    } else {
+      setStatus(pollData.error || 'Connection failed', false);
+      btn.disabled = false;
+      btn.innerHTML = '<span class="btn-icon">CF</span> Connect to Cloudflare';
     }
-  });
-});
+  } catch (e) {
+    setStatus('Error: ' + e.message, false);
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn-icon">CF</span> Connect to Cloudflare';
+  }
+}
 
+// ── Deploy ──────────────────────────────────────────────────
 async function deploy() {
-  if (!tokenValid) return;
+  if (!accessToken) return;
   const btn = document.getElementById('deployBtn');
   btn.disabled = true;
 
@@ -79,7 +91,7 @@ async function deploy() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        token: document.getElementById('apiToken').value.trim(),
+        access_token: accessToken,
         worker_name: document.getElementById('workerName').value.trim() || undefined,
         admin_password: document.getElementById('adminPassword').value.trim() || undefined,
       }),
@@ -106,6 +118,7 @@ async function deploy() {
   }
 }
 
+// ── Helpers ─────────────────────────────────────────────────
 function renderProgress(steps, done) {
   const el = document.getElementById('progress-steps');
   el.innerHTML = steps.map((s, i) => {

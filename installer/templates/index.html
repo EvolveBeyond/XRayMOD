@@ -32,15 +32,24 @@
       <div id="step-cf" class="step">
         <button class="back-btn" onclick="goBack()">&larr; Back</button>
         <h2>Cloudflare Setup</h2>
-        <p class="step-desc">Enter your Cloudflare API token to deploy the panel.</p>
-        
-        <div class="form-group">
-          <label>API Token</label>
-          <input type="password" id="apiToken" placeholder="Paste your Cloudflare API token">
-          <p class="help">Required permissions: Workers Scripts Edit, D1 Edit</p>
+        <p class="step-desc">Connect your Cloudflare account to deploy the panel.</p>
+
+        <!-- OAuth Connect Button -->
+        <div id="oauth-section">
+          <button class="btn-primary btn-oauth" id="connectBtn" onclick="connectCloudflare()">
+            <span class="btn-icon">CF</span>
+            Connect to Cloudflare
+          </button>
+          <p class="help">You'll be redirected to Cloudflare to authorize. No API token needed.</p>
         </div>
 
-        <button class="btn-secondary" onclick="openTokenPage()">Open Token Creation Page</button>
+        <!-- Connected State -->
+        <div id="connected-section" style="display:none">
+          <div class="status-msg ok">
+            <span class="check-icon">&#10003;</span>
+            Connected to <strong id="account-name"></strong>
+          </div>
+        </div>
 
         <div id="token-status" class="status-msg"></div>
 
@@ -62,7 +71,7 @@
         <button class="back-btn" onclick="goBack()">&larr; Back</button>
         <h2>Personal Server Setup</h2>
         <p class="step-desc">Connect to your VPS via SSH to install the panel.</p>
-        
+
         <div class="coming-soon">
           <div class="cs-icon">SV</div>
           <h3>Coming in Phase 2</h3>
@@ -83,7 +92,7 @@
         <div class="result-icon">&#10003;</div>
         <h2>Deployment Complete!</h2>
         <p class="step-desc">Your panel is ready. Save this information.</p>
-        
+
         <div class="result-card">
           <div class="result-row">
             <span class="result-label">Panel URL</span>
