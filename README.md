@@ -102,25 +102,24 @@ https://your-worker.workers.dev/<your-unique-uuid>/
 bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main/install.sh)
 ```
 
-The installer handles everything:
-1. Checks prerequisites (curl, uv)
-2. Downloads the deployment script
-3. Prompts for your Cloudflare API token
-4. Creates D1 database automatically
-5. Deploys the Worker
-6. **Shows your secret panel URL with UUID**
+This launches a **local WebUI installer** in your browser (`http://localhost:8000`):
+
+1. Opens automatically in your default browser
+2. Enter your **Cloudflare API Token**
+3. Click **Verify** — validates your token and shows your account
+4. Click **Deploy** — creates D1 database + Worker automatically
+5. **Your secret panel URL with UUID is shown** — save it!
 
 ### What You Get
 
-After installation, you'll receive:
-
 | Item | Value |
 |------|-------|
+| Installer URL | `http://localhost:8000` |
 | Panel URL | `https://xxx.workers.dev/a1b2c3d4-...` |
 | Admin user | `admin` |
-| Admin pass | *(your chosen password)* |
+| Admin pass | *(auto-generated or your choice)* |
 
-**Save this URL!** It is the only way to access your panel. The UUID part (`a1b2c3d4-...`) is your secret — never share it.
+**Save the Panel URL!** It is the only way to access your panel. The UUID part (`a1b2c3d4-...`) is your secret — never share it.
 
 ### First Login
 
@@ -302,10 +301,16 @@ XrayMOD/
 │   └── subscription.ts      # Subscription link generation
 ├── src/                     # React frontend (Vite + Tailwind v4)
 ├── components/ui/           # shadcn/ui components
-├── installer/               # Deployment scripts
-│   ├── install.py           # Python installer
-│   └── backend-install.sh   # VPS backend installer
-├── wizard/                  # One-click deployer
+├── installer/               # FastAPI WebUI installer
+│   ├── app.py               # FastAPI app + routes
+│   ├── cf_api.py            # Cloudflare API client
+│   ├── deployer.py          # Deploy logic (Worker + D1)
+│   ├── config.py            # Local config persistence
+│   ├── templates/index.html # WebUI frontend
+│   └── static/              # CSS + JS assets
+├── backend/                 # FastAPI backend for VPS mode
+│   ├── main.py              # FastAPI app with 11 routers
+│   └── database.py          # SQLite/PostgreSQL schema
 ├── worker.js                # Compiled Worker bundle
 └── wrangler.toml            # Cloudflare configuration
 ```
@@ -332,14 +337,20 @@ Set `PANEL_RECOVERY=1` in Worker environment variables to access `/admin` direct
 ### Lost Panel URL
 
 If you lost your UUID URL, you can:
-1. Deploy a fresh Worker
+1. Re-run the installer (`bash <(curl -fsSL ...)`) and deploy a fresh Worker
 2. Or use `PANEL_RECOVERY=1` to access the old one
 
-### Worker Won't Deploy
+### Installer Won't Start
 
-- Verify Wrangler authentication: `wrangler whoami`
-- Confirm D1 database ID in `wrangler.toml`
-- Install dependencies: `npm install`
+- Make sure `uv` is installed: `uv --version`
+- Make sure `curl` is installed: `curl --version`
+- Try running manually: `cd ~/.xraymod/XRayMOD && uv run xraymod-install`
+
+### Deploy Fails from WebUI
+
+- Verify your Cloudflare API token is valid (the WebUI verifies this automatically)
+- Check if you have CF Workers permissions on your account
+- Try a different worker name (must be globally unique)
 
 ---
 
