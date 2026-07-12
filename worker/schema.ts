@@ -219,6 +219,7 @@ const DEFAULT_SETTINGS = {
   'panel.password_hash': '',
   'panel.secret_key': '',
   'panel.admin_uuid': '',
+  'panel.access_uuid': '',
   'financial.referral_commission': '15',
   'financial.min_withdrawal': '5',
   'financial.tax_fee': '2',

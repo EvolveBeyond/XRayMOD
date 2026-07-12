@@ -17,6 +17,7 @@ import { getDisguiseConfig, remapDisguisePath, getDecoyResponse } from './disgui
 import { isGrpcRequest } from './proxy/grpc';
 import { isXHTTPRequest } from './proxy/xhttp';
 import { handleTelegramWebhook, handleTelegramLogin } from './telegram';
+import { getCryptoKey } from './crypto';
 
 type Handler = (
   request: Request,
@@ -137,8 +138,29 @@ export async function handleRequest(
       }
     }
 
-    // Disguise system: remap secret paths and serve decoy for leaked real paths
+    // UUID-based panel access — only serve panel to those who know the UUID
     let pathname = url.pathname;
+    const panelUUID = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('panel.access_uuid').first<{ v: string }>();
+    const accessUuid = panelUUID?.v;
+
+    // Routes that bypass UUID check (proxy, sub, install, telegram)
+    const bypassUUID = pathname.startsWith('/sub/') || pathname.startsWith('/install') ||
+                       pathname.startsWith('/bot') || pathname === '/admin' ||
+                       request.headers.get('Upgrade') === 'websocket';
+
+    if (accessUuid && !bypassUUID) {
+      const segments = pathname.split('/').filter(Boolean);
+      if (segments.length === 0 || segments[0] !== accessUuid) {
+        // UUID not matched — show decoy
+        const disguise = await getDisguiseConfig(env, env.DB);
+        return getDecoyResponse(url.host, disguise.fallbackPage);
+      }
+      // Strip UUID prefix
+      pathname = '/' + segments.slice(1).join('/');
+      url.pathname = pathname || '/';
+    }
+
+    // Disguise system: remap secret paths and serve decoy for leaked real paths
     const disguise = await getDisguiseConfig(env, env.DB);
     if (disguise.on) {
       const { remapped, isDecoy } = remapDisguisePath(pathname, disguise);

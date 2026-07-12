@@ -45,6 +45,23 @@ export async function handleInstall(
         .bind('panel.password_hash', hash, Date.now())
         .run();
 
+      // Generate random panel access UUID
+      const accessUUID = crypto.randomUUID();
+      await env.DB.prepare(
+        'INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)'
+      )
+        .bind('panel.access_uuid', accessUUID, Date.now())
+        .run();
+
+      // Generate random secret key
+      const secretKey = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+      await env.DB.prepare(
+        'INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)'
+      )
+        .bind('panel.secret_key', secretKey, Date.now())
+        .run();
+
       // Update admin user password
       await env.DB.prepare(
         'UPDATE users SET password_hash = ? WHERE role = ?'
@@ -52,7 +69,7 @@ export async function handleInstall(
         .bind(hash, 'admin')
         .run();
 
-      return new Response(JSON.stringify({ success: true, message: 'Password set successfully' }), {
+      return new Response(JSON.stringify({ success: true, message: 'Password set successfully', accessUUID }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -258,11 +275,16 @@ export async function handleInstall(
         const data = await res.json();
 
         if (data.success) {
-          success.textContent = 'Setup complete! Redirecting to login...';
+          success.innerHTML = 'Setup complete!<br><br>' +
+            '<b>Your Panel URL:</b><br>' +
+            '<code style="background:#18181b;padding:8px;border-radius:6px;display:block;margin-top:8px;word-break:break-all">' +
+            window.location.origin + '/' + data.accessUUID + '</code><br>' +
+            '<small style="color:#a1a1aa">Save this URL! It is the only way to access your panel.</small>' +
+            '<br><br>Redirecting to login...';
           success.style.display = 'block';
           setTimeout(() => {
-            window.location.href = '/';
-          }, 1500);
+            window.location.href = '/' + data.accessUUID;
+          }, 5000);
         } else {
           error.textContent = data.error || 'Setup failed';
           error.style.display = 'block';

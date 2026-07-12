@@ -357,16 +357,16 @@ def main() -> None:
         print("    - Account > D1 > Edit")
         sys.exit(1)
 
-    # Step 2: Worker name
+    # Step 2: Worker name — completely random, no product name
     if prev_worker:
         print(f"\n  Found previous worker: {prev_worker}")
         use_prev = _input("Update this worker? [Y/n]", "y").lower()
         if use_prev in ("y", "yes", ""):
             worker_name = prev_worker
         else:
-            worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
+            worker_name = _input("Worker name", f"cf-{secrets.token_hex(6)}")
     else:
-        worker_name = _input("Worker name", f"xraymod-{secrets.token_hex(4)}")
+        worker_name = _input("Worker name", f"cf-{secrets.token_hex(6)}")
 
     d1_name = _input("D1 database name", f"{worker_name}-db")
     admin_password = _input("Admin password (empty = auto-generate)", "")

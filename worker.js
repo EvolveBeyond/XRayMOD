@@ -216,6 +216,7 @@ var DEFAULT_SETTINGS = {
   "panel.password_hash": "",
   "panel.secret_key": "",
   "panel.admin_uuid": "",
+  "panel.access_uuid": "",
   "financial.referral_commission": "15",
   "financial.min_withdrawal": "5",
   "financial.tax_fee": "2",
@@ -414,7 +415,13 @@ async function handleInstall(request, env, _ctx, _params) {
       await env.DB.prepare(
         "UPDATE users SET password_hash = ? WHERE role = ?"
       ).bind(hash, "admin").run();
-      return new Response(JSON.stringify({ success: true, message: "Password set successfully" }), {
+      // Generate random panel access UUID
+      const accessUUID = crypto.randomUUID();
+      await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("panel.access_uuid", accessUUID, Date.now()).run();
+      // Generate random secret key
+      const secretKey = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, "0")).join("");
+      await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("panel.secret_key", secretKey, Date.now()).run();
+      return new Response(JSON.stringify({ success: true, message: "Password set successfully", accessUUID }), {
         status: 200,
         headers: { "Content-Type": "application/json" }
       });
@@ -618,11 +625,16 @@ async function handleInstall(request, env, _ctx, _params) {
         const data = await res.json();
 
         if (data.success) {
-          success.textContent = 'Setup complete! Redirecting to login...';
+          success.innerHTML = 'Setup complete!<br><br>' +
+            '<b>Your Panel URL:</b><br>' +
+            '<code style="background:#18181b;padding:8px;border-radius:6px;display:block;margin-top:8px;word-break:break-all">' +
+            window.location.origin + '/' + data.accessUUID + '</code><br>' +
+            '<small style="color:#a1a1aa">Save this URL! It is the only way to access your panel.</small>' +
+            '<br><br>Redirecting to login...';
           success.style.display = 'block';
           setTimeout(() => {
-            window.location.href = '/';
-          }, 1500);
+            window.location.href = '/' + data.accessUUID;
+          }, 5000);
         } else {
           error.textContent = data.error || 'Setup failed';
           error.style.display = 'block';
@@ -1705,6 +1717,32 @@ var FALLBACK_HTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+// --- Encryption Utilities ---
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function encryptData(plaintext, password) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, tagLength: 128 }, key, enc.encode(plaintext));
+  const combined = new Uint8Array(salt.length + iv.length + ciphertext.byteLength);
+  combined.set(salt, 0); combined.set(iv, salt.length); combined.set(new Uint8Array(ciphertext), salt.length + iv.length);
+  return btoa(String.fromCharCode(...combined)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+async function decryptData(encoded, password) {
+  const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const combined = new Uint8Array(atob(padded).split("").map(c => c.charCodeAt(0)));
+  const salt = combined.slice(0, 16), iv = combined.slice(16, 28), ciphertext = combined.slice(28);
+  const key = await deriveKey(password, salt);
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv, tagLength: 128 }, key, ciphertext);
+  return new TextDecoder().decode(decrypted);
+}
+
 // --- Utility Functions ---
 function detectIranianISP(request) {
   const cf = (request && request.cf) || {};
@@ -1927,7 +1965,22 @@ async function handleRequest(request, env, ctx) {
       if (isGrpcRequest(request)) return handleProxyTraffic(request, env, ctx);
       if (isXHTTPRequest(request)) return handleProxyTraffic(request, env, ctx);
     }
+
+    // UUID-based panel access
     let pathname = url.pathname;
+    const panelUUID = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("panel.access_uuid").first();
+    const accessUuid = panelUUID?.v;
+    const bypassUUID = pathname.startsWith("/sub/") || pathname.startsWith("/install") || pathname.startsWith("/bot") || pathname === "/admin" || request.headers.get("Upgrade") === "websocket";
+    if (accessUuid && !bypassUUID) {
+      const segments = pathname.split("/").filter(Boolean);
+      if (segments.length === 0 || segments[0] !== accessUuid) {
+        const disguise = await getDisguiseConfig(env, env.DB);
+        return getDecoyResponse(url.host, disguise.fallbackPage);
+      }
+      pathname = "/" + segments.slice(1).join("/");
+      url.pathname = pathname || "/";
+    }
+
     const disguise = await getDisguiseConfig(env, env.DB);
     if (disguise.on) {
       const { remapped, isDecoy } = remapDisguisePath(pathname, disguise);
