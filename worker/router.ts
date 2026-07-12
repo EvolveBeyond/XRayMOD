@@ -9,8 +9,14 @@ import { handleUsers } from './api/users';
 import { handleProtocols } from './api/protocols';
 import { handleConfigs } from './api/configs';
 import { handleSettings } from './api/settings';
+import { handleCleanIP } from './api/cleanip';
+import { handleBackends } from './api/backends';
 import { handleSubscription } from './subscription';
 import { handleProxyTraffic } from './proxy';
+import { getDisguiseConfig, remapDisguisePath, getDecoyResponse } from './disguise';
+import { isGrpcRequest } from './proxy/grpc';
+import { isXHTTPRequest } from './proxy/xhttp';
+import { handleTelegramWebhook, handleTelegramLogin } from './telegram';
 
 type Handler = (
   request: Request,
@@ -37,6 +43,12 @@ const routes: Route[] = [
   { pattern: new URLPattern({ pathname: '/api/configs' }), handler: handleConfigs },
   { pattern: new URLPattern({ pathname: '/api/configs/:id' }), handler: handleConfigs },
   { pattern: new URLPattern({ pathname: '/api/settings' }), handler: handleSettings },
+  { pattern: new URLPattern({ pathname: '/api/cleanip' }), handler: handleCleanIP },
+  { pattern: new URLPattern({ pathname: '/api/cleanip/:action' }), handler: handleCleanIP },
+  { pattern: new URLPattern({ pathname: '/api/backends' }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: '/api/backends/:id' }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: '/bot' }), handler: handleTelegramWebhook },
+  { pattern: new URLPattern({ pathname: '/admin' }), handler: handleTelegramLogin },
   { pattern: new URLPattern({ pathname: '/sub/:token' }), handler: handleSubscription },
 ];
 
@@ -108,15 +120,41 @@ export async function handleRequest(
     // Ensure DB schema
     ctx.waitUntil(ensureSchema(env.DB));
 
-    // WebSocket upgrade
+    // WebSocket upgrade — proxy traffic bypasses disguise
     if (request.headers.get('Upgrade') === 'websocket') {
       return handleProxyTraffic(request, env, ctx);
     }
 
+    // gRPC/XHTTP transport — POST-based proxy traffic
+    if (request.method === 'POST' && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/install')) {
+      if (isGrpcRequest(request)) {
+        // gRPC traffic — forward to proxy handler
+        return handleProxyTraffic(request, env, ctx);
+      }
+      if (isXHTTPRequest(request)) {
+        // XHTTP traffic — forward to proxy handler
+        return handleProxyTraffic(request, env, ctx);
+      }
+    }
+
+    // Disguise system: remap secret paths and serve decoy for leaked real paths
+    let pathname = url.pathname;
+    const disguise = await getDisguiseConfig(env, env.DB);
+    if (disguise.on) {
+      const { remapped, isDecoy } = remapDisguisePath(pathname, disguise);
+      if (isDecoy) {
+        return getDecoyResponse(url.host, disguise.fallbackPage);
+      }
+      if (remapped !== pathname) {
+        pathname = remapped;
+        url.pathname = pathname;
+      }
+    }
+
     // Redirect to /install if not configured (skip API and install routes)
-    const skipInstallCheck = url.pathname.startsWith('/install') ||
-                             url.pathname.startsWith('/api/') ||
-                             url.pathname.startsWith('/sub/');
+    const skipInstallCheck = pathname.startsWith('/install') ||
+                             pathname.startsWith('/api/') ||
+                             pathname.startsWith('/sub/');
     if (!skipInstallCheck) {
       try {
         const configured = await env.DB.prepare(
@@ -145,6 +183,11 @@ export async function handleRequest(
         }
         return route.handler(request, env, ctx, params);
       }
+    }
+
+    // When disguise is ON, non-API/non-sub unrecognized paths get the decoy page
+    if (disguise.on && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/sub/') && !url.pathname.startsWith('/install')) {
+      return getDecoyResponse(url.host, disguise.fallbackPage);
     }
 
     // Try fetching from PAGES_URL

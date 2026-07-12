@@ -35,7 +35,10 @@ import {
   Share2,
   TrendingUp,
   ShoppingCart,
-  Lock
+  Lock,
+  Radar,
+  Scan,
+  Network
 } from 'lucide-react';
 
 // Telegram Mini App & TON Wallet — disabled by default on Cloudflare Workers
@@ -253,6 +256,30 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Detect Telegram Mini App
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) {
+      setIsTelegramMiniApp(true);
+      tg.ready();
+      tg.expand();
+      tg.setHeaderColor('#09090b');
+      tg.setBackgroundColor('#09090b');
+      tg.BackButton.show();
+      tg.BackButton.onClick(() => {
+        if (activeTab !== 'dashboard') setActiveTab('dashboard');
+      });
+    }
+
+    // Check for Telegram login params
+    const urlParams = new URLSearchParams(window.location.search);
+    const tgChatId = urlParams.get('tg');
+    const tgToken = urlParams.get('token');
+    if (tgChatId && tgToken) {
+      fetch(`${api('/admin')}?chat_id=${tgChatId}&token=${tgToken}`, { credentials: 'include' })
+        .then(() => window.location.href = '/')
+        .catch(() => {});
+    }
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -273,6 +300,53 @@ export default function App() {
       }
     };
     fetchData();
+
+    // Fetch disguise settings for admin
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(api('/api/settings'), FETCH_OPTS);
+        const data = await res.json() as { success: boolean; data?: Record<string, string> };
+        if (data.success && data.data) {
+          setDisguiseEnabled(data.data['disguise.enabled'] === 'true');
+          setDisguiseAdminPath(data.data['disguise.admin_path'] || '');
+          setDisguiseLoginPath(data.data['disguise.login_path'] || '');
+          setDisguiseSubPath(data.data['disguise.sub_path'] || '');
+          setDisguiseFallbackPage(data.data['disguise.fallback_page'] || '1101');
+          setEchEnabled(data.data['ech.enabled'] === 'true');
+          setEchSni(data.data['ech.sni'] || 'cloudflare-ech.com');
+          setEchDns(data.data['ech.dns'] || 'https://dns.alidns.com/dns-query');
+          setTlsFragEnabled(data.data['tls_fragment.enabled'] === 'true');
+          setTlsFragMode(data.data['tls_fragment.mode'] || 'Shadowrocket');
+          setTgBotToken(data.data['tg.bot_token'] || '');
+          setTgChatId(data.data['tg.chat_id'] || '');
+        }
+      } catch {}
+    };
+    fetchSettings();
+
+    // Fetch clean IP config for admin
+    const fetchCleanIPs = async () => {
+      try {
+        const res = await fetch(api('/api/cleanip/list'), FETCH_OPTS);
+        const data = await res.json() as { success: boolean; data?: { ips: string[]; carrier: string } };
+        if (data.success && data.data) {
+          setCleanIPs(data.data.ips || []);
+        }
+      } catch {}
+    };
+    fetchCleanIPs();
+
+    // Fetch backends for admin
+    const fetchBackends = async () => {
+      try {
+        const res = await fetch(api('/api/backends'), FETCH_OPTS);
+        const data = await res.json() as { success: boolean; data?: any[] };
+        if (data.success && data.data) {
+          setBackends(data.data);
+        }
+      } catch {}
+    };
+    fetchBackends();
   }, []);
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -290,6 +364,36 @@ export default function App() {
   const [selectedProtocol, setSelectedProtocol] = useState<ProtocolDefinition | null>(null);
   const [configFormValues, setConfigFormValues] = useState<Record<string, any>>({});
   const [isConfigDialogOpen, setIsConfigDialogOpen] = useState(false);
+
+  // Disguise Settings State
+  const [disguiseEnabled, setDisguiseEnabled] = useState(false);
+  const [disguiseAdminPath, setDisguiseAdminPath] = useState('');
+  const [disguiseLoginPath, setDisguiseLoginPath] = useState('');
+  const [disguiseSubPath, setDisguiseSubPath] = useState('');
+  const [disguiseFallbackPage, setDisguiseFallbackPage] = useState('1101');
+
+  // Clean IP State
+  const [cleanIPs, setCleanIPs] = useState<string[]>([]);
+  const [cleanIPScanResults, setCleanIPScanResults] = useState<string[]>([]);
+  const [cleanIPISP, setCleanIPISP] = useState({ asn: 0, isp: '', country: '', carrier: 'unknown' });
+  const [cleanIPScanning, setCleanIPScanning] = useState(false);
+
+  // Network Settings State
+  const [echEnabled, setEchEnabled] = useState(false);
+  const [echSni, setEchSni] = useState('cloudflare-ech.com');
+  const [echDns, setEchDns] = useState('https://dns.alidns.com/dns-query');
+  const [tlsFragEnabled, setTlsFragEnabled] = useState(false);
+  const [tlsFragMode, setTlsFragMode] = useState('Shadowrocket');
+
+  // Telegram Bot State
+  const [tgBotToken, setTgBotToken] = useState('');
+  const [tgChatId, setTgChatId] = useState('');
+  const [isTelegramMiniApp, setIsTelegramMiniApp] = useState(false);
+
+  // Backend/Contribution State
+  const [backends, setBackends] = useState<any[]>([]);
+  const [backendIP, setBackendIP] = useState('');
+  const [backendPort, setBackendPort] = useState('443');
 
   const handleConfigValueChange = (name: string, value: any) => {
     setConfigFormValues(prev => ({ ...prev, [name]: value }));
@@ -360,12 +464,94 @@ export default function App() {
     toast.success('Configuration generated and saved');
   };
 
-  const handleSaveSettings = () => {
-    toast.success('Settings saved successfully');
+  const handleSaveSettings = async () => {
+    try {
+      await fetch(api('/api/settings'), {
+        ...FETCH_OPTS,
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          'disguise.enabled': String(disguiseEnabled),
+          'disguise.admin_path': disguiseAdminPath,
+          'disguise.login_path': disguiseLoginPath,
+          'disguise.sub_path': disguiseSubPath,
+          'disguise.fallback_page': disguiseFallbackPage,
+          'ech.enabled': String(echEnabled),
+          'ech.sni': echSni,
+          'ech.dns': echDns,
+          'tls_fragment.enabled': String(tlsFragEnabled),
+          'tls_fragment.mode': tlsFragMode,
+          'tg.bot_token': tgBotToken,
+          'tg.chat_id': tgChatId,
+        }),
+      });
+      toast.success('Settings saved successfully');
+    } catch {
+      toast.error('Failed to save settings');
+    }
   };
 
   const handleWithdraw = () => {
     toast.info('Withdrawal request submitted');
+  };
+
+  const handleScanCleanIP = async () => {
+    setCleanIPScanning(true);
+    try {
+      const res = await fetch(api('/api/cleanip/scan?count=16'), FETCH_OPTS);
+      const data = await res.json() as { success: boolean; data?: { ips: string[]; isp: any } };
+      if (data.success && data.data) {
+        setCleanIPScanResults(data.data.ips);
+        setCleanIPISP(data.data.isp);
+        toast.success(`Found ${data.data.ips.length} clean IPs`);
+      }
+    } catch {
+      toast.error('Failed to scan clean IPs');
+    } finally {
+      setCleanIPScanning(false);
+    }
+  };
+
+  const handleApplyCleanIP = async () => {
+    if (!cleanIPScanResults.length) return;
+    try {
+      const res = await fetch(api('/api/cleanip/apply'), {
+        ...FETCH_OPTS,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ips: cleanIPScanResults }),
+      });
+      const data = await res.json() as { success: boolean; data?: { count: number } };
+      if (data.success) {
+        setCleanIPs(cleanIPScanResults);
+        toast.success(`Applied ${data.data?.count || cleanIPScanResults.length} clean IPs`);
+      }
+    } catch {
+      toast.error('Failed to apply clean IPs');
+    }
+  };
+
+  const handleRegisterBackend = async () => {
+    if (!backendIP) return toast.error('Enter VPS IP');
+    try {
+      const res = await fetch(api('/api/backends'), {
+        ...FETCH_OPTS,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vps_ip: backendIP, vps_port: parseInt(backendPort) || 443 }),
+      });
+      const data = await res.json() as { success: boolean };
+      if (data.success) {
+        toast.success('Backend registered!');
+        setBackendIP('');
+        // Refresh backends
+        const r2 = await fetch(api('/api/backends'), FETCH_OPTS);
+        const d2 = await r2.json() as { success: boolean; data?: any[] };
+        if (d2.success && d2.data) setBackends(d2.data);
+      }
+    } catch {
+      toast.error('Failed to register backend');
+    }
   };
 
   if (!isLoggedIn) {
@@ -402,6 +588,7 @@ export default function App() {
                 <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={LayoutDashboard} label="Dashboard" />
                 <NavButton active={activeTab === 'nodes'} onClick={() => setActiveTab('nodes')} icon={Server} label="Nodes" />
                 <NavButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={Users} label="Users" />
+                <NavButton active={activeTab === 'cleanip'} onClick={() => setActiveTab('cleanip')} icon={Radar} label="Clean IP" />
                 <NavButton active={activeTab === 'protocols'} onClick={() => setActiveTab('protocols')} icon={Shield} label="Protocols" />
                 <NavButton active={activeTab === 'wallet'} onClick={() => setActiveTab('wallet')} icon={Wallet} label="Wallet" />
                 <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={Settings} label="Settings" />
@@ -506,6 +693,7 @@ export default function App() {
                 <MobileNavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={LayoutDashboard} label="Dashboard" />
                 <MobileNavButton active={activeTab === 'nodes'} onClick={() => setActiveTab('nodes')} icon={Server} label="Nodes" />
                 <MobileNavButton active={activeTab === 'users'} onClick={() => setActiveTab('users')} icon={Users} label="Users" />
+                <MobileNavButton active={activeTab === 'cleanip'} onClick={() => setActiveTab('cleanip')} icon={Radar} label="Clean IP" />
                 <MobileNavButton active={activeTab === 'protocols'} onClick={() => setActiveTab('protocols')} icon={Shield} label="Protocols" />
                 <MobileNavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={Settings} label="Settings" />
               </>
@@ -1030,6 +1218,80 @@ function AdminView({
         </div>
       )}
 
+      {activeTab === 'cleanip' && (
+        <div className="space-y-6">
+          <h2 className="text-3xl font-black">Clean IP Scanner</h2>
+          
+          <Card className="border-zinc-800 bg-zinc-900/30 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2"><Radar size={18} className="text-emerald-500" /> ISP Detection</h3>
+                <p className="text-xs text-zinc-500 mt-1">Your network info from Cloudflare</p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="border-zinc-800" onClick={handleScanCleanIP} disabled={cleanIPScanning}>
+                  <Scan size={16} className="mr-2" />
+                  {cleanIPScanning ? 'Scanning...' : 'Scan IPs'}
+                </Button>
+                {cleanIPScanResults.length > 0 && (
+                  <Button className="bg-emerald-600 hover:bg-emerald-500" onClick={handleApplyCleanIP}>
+                    <Check size={16} className="mr-2" />
+                    Apply Best IPs
+                  </Button>
+                )}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">ISP</p>
+                <p className="text-sm font-bold mt-1">{cleanIPISP.isp || 'Detecting...'}</p>
+              </div>
+              <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">ASN</p>
+                <p className="text-sm font-bold mt-1">{cleanIPISP.asn || '---'}</p>
+              </div>
+              <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Country</p>
+                <p className="text-sm font-bold mt-1">{cleanIPISP.country || '---'}</p>
+              </div>
+              <div className="p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Carrier</p>
+                <p className="text-sm font-bold mt-1 text-emerald-500">{cleanIPISP.carrier.toUpperCase()}</p>
+              </div>
+            </div>
+          </Card>
+
+          {cleanIPScanResults.length > 0 && (
+            <Card className="border-zinc-800 bg-zinc-900/30 p-6 space-y-4">
+              <h3 className="text-lg font-bold">Scan Results ({cleanIPScanResults.length} IPs)</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {cleanIPScanResults.map((ip, i) => (
+                  <div key={i} className="p-2 bg-zinc-950 rounded-lg border border-zinc-800 text-sm font-mono">
+                    {ip}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {cleanIPs.length > 0 && (
+            <Card className="border-zinc-800 bg-zinc-900/30 p-6 space-y-4">
+              <h3 className="text-lg font-bold">Active Clean IPs ({cleanIPs.length})</h3>
+              <p className="text-xs text-zinc-500">These IPs are used as server addresses in subscription links.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {cleanIPs.map((ip, i) => (
+                  <div key={i} className="p-2 bg-zinc-950 rounded-lg border border-zinc-800 text-sm font-mono flex items-center gap-2">
+                    <Check size={12} className="text-emerald-500" />
+                    {ip}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
       {activeTab === 'protocols' && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
@@ -1306,6 +1568,155 @@ function AdminView({
               </div>
             </div>
 
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold flex items-center gap-2"><Shield size={18} className="text-rose-500" /> Disguise / Anti-Detection</h3>
+              <p className="text-xs text-zinc-500">Hide the admin panel behind secret paths. Unauthorized visitors see a fake Cloudflare error page.</p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-500/10 text-rose-500 rounded-lg"><Shield size={20} /></div>
+                    <div>
+                      <p className="font-bold">Enable Disguise</p>
+                      <p className="text-xs text-zinc-500">Show fake error page to unauthorized visitors</p>
+                    </div>
+                  </div>
+                  <Switch checked={disguiseEnabled} onCheckedChange={setDisguiseEnabled} />
+                </div>
+                {disguiseEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Admin Secret Path</Label>
+                      <Input
+                        value={disguiseAdminPath}
+                        onChange={(e) => setDisguiseAdminPath(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                        placeholder="e.g. x7k9m"
+                        className="bg-zinc-900 border-zinc-800"
+                      />
+                      <p className="text-[10px] text-zinc-600">Access panel at: /{disguiseAdminPath || '<path>'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Login Secret Path</Label>
+                      <Input
+                        value={disguiseLoginPath}
+                        onChange={(e) => setDisguiseLoginPath(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                        placeholder="e.g. m3x7p"
+                        className="bg-zinc-900 border-zinc-800"
+                      />
+                      <p className="text-[10px] text-zinc-600">Access login at: /{disguiseLoginPath || '<path>'}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Subscription Secret Path</Label>
+                      <Input
+                        value={disguiseSubPath}
+                        onChange={(e) => setDisguiseSubPath(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                        placeholder="e.g. k9x3m"
+                        className="bg-zinc-900 border-zinc-800"
+                      />
+                      <p className="text-[10px] text-zinc-600">Subscription at: /{disguiseSubPath || '<path>'}/:token</p>
+                    </div>
+                  </div>
+                )}
+                {disguiseEnabled && (
+                  <div className="p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                    <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Fallback Page</Label>
+                    <Select value={disguiseFallbackPage} onValueChange={setDisguiseFallbackPage}>
+                      <SelectTrigger className="bg-zinc-900 border-zinc-800 mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                        <SelectItem value="1101">Cloudflare Error 1101</SelectItem>
+                        <SelectItem value="nginx">Nginx Welcome Page</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-zinc-600 mt-2">What unauthorized visitors see when hitting fake or leaked paths.</p>
+                  </div>
+                )}
+                {disguiseEnabled && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                    <p className="text-xs text-amber-400 font-bold">Recovery Mode</p>
+                    <p className="text-[10px] text-amber-500/70 mt-1">If locked out, set <code className="bg-zinc-950 px-1 rounded">PANEL_RECOVERY=1</code> in Worker environment variables to bypass disguise and access /admin directly.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold flex items-center gap-2"><Network size={18} className="text-cyan-500" /> Network (ECH + TLS Fragment)</h3>
+              <p className="text-xs text-zinc-500">Anti-censorship features for subscription links. These add parameters to generated configs.</p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-cyan-500/10 text-cyan-500 rounded-lg"><Shield size={20} /></div>
+                    <div>
+                      <p className="font-bold">ECH (Encrypted Client Hello)</p>
+                      <p className="text-xs text-zinc-500">Encrypt SNI to bypass DPI inspection</p>
+                    </div>
+                  </div>
+                  <Switch checked={echEnabled} onCheckedChange={setEchEnabled} />
+                </div>
+                {echEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                    <div className="space-y-2">
+                      <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">ECH SNI</Label>
+                      <Input value={echSni} onChange={(e) => setEchSni(e.target.value)} className="bg-zinc-900 border-zinc-800" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">ECH DNS</Label>
+                      <Input value={echDns} onChange={(e) => setEchDns(e.target.value)} className="bg-zinc-900 border-zinc-800" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-500/10 text-purple-500 rounded-lg"><Lock size={20} /></div>
+                    <div>
+                      <p className="font-bold">TLS Fragment</p>
+                      <p className="text-xs text-zinc-500">Split TLS handshake to evade DPI detection</p>
+                    </div>
+                  </div>
+                  <Switch checked={tlsFragEnabled} onCheckedChange={setTlsFragEnabled} />
+                </div>
+                {tlsFragEnabled && (
+                  <div className="p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                    <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Fragment Mode</Label>
+                    <Select value={tlsFragMode} onValueChange={setTlsFragMode}>
+                      <SelectTrigger className="bg-zinc-900 border-zinc-800 mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                        <SelectItem value="Shadowrocket">Shadowrocket (1,40-60,30-50,tlshello)</SelectItem>
+                        <SelectItem value="Happ">Happ (3,1,tlshello)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-zinc-600 mt-2">Shadowrocket format is compatible with most clients. Happ format for specific DPI environments.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold flex items-center gap-2"><Globe size={18} className="text-blue-500" /> Telegram Bot</h3>
+              <p className="text-xs text-zinc-500">Manage your panel from Telegram. Create a bot via @BotFather.</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-zinc-950 rounded-2xl border border-zinc-800">
+                <div className="space-y-2">
+                  <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Bot Token</Label>
+                  <Input type="password" value={tgBotToken} onChange={(e) => setTgBotToken(e.target.value)} placeholder="123456789:ABCdef..." className="bg-zinc-900 border-zinc-800" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Admin Chat ID</Label>
+                  <Input value={tgChatId} onChange={(e) => setTgChatId(e.target.value)} placeholder="Your Telegram user ID" className="bg-zinc-900 border-zinc-800" />
+                </div>
+              </div>
+              {tgBotToken && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                  <p className="text-xs text-blue-400 font-bold">Webhook Setup</p>
+                  <p className="text-[10px] text-blue-500/70 mt-1">After saving, set the webhook URL to: <code className="bg-zinc-950 px-1 rounded">{window.location.origin}/bot</code></p>
+                  <p className="text-[10px] text-blue-500/70 mt-1">Or use: <code className="bg-zinc-950 px-1 rounded">curl "https://api.telegram.org/bot{tgBotToken}/setWebhook?url={encodeURIComponent(window.location.origin + '/bot')}"</code></p>
+                </div>
+              )}
+            </div>
+
             <div className="pt-4 flex justify-end">
               <Button className="bg-emerald-600 hover:bg-emerald-500 font-bold px-8" onClick={handleSaveSettings}>Save All Changes</Button>
             </div>
@@ -1520,15 +1931,55 @@ function UserView({ activeTab, userConfigs, userAddress, handleWithdraw, userPro
             </Card>
           </div>
 
-          {/* Contribution Mode */}
-          <div className="px-4 md:px-0">
-            <Card className="border-zinc-800 bg-amber-500/5 border-amber-500/20 p-8 flex flex-col md:flex-row items-center gap-8">
-              <div className="p-6 bg-amber-500/10 text-amber-500 rounded-3xl"><Globe size={48} /></div>
-              <div className="flex-1 space-y-2 text-center md:text-left">
-                <h3 className="text-2xl font-black">Contribution Discount</h3>
-                <p className="text-zinc-400 max-w-xl">Provide a healthy domain or a server node to our network and get a <b>90% discount</b> on your own services. Your configs will run on your provided host.</p>
+          {/* Backend / Contribution Mode */}
+          <div className="px-4 md:px-0 space-y-4">
+            <Card className="border-zinc-800 bg-amber-500/5 border-amber-500/20 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl"><Server size={24} /></div>
+                <div>
+                  <h3 className="text-xl font-black">Your Server</h3>
+                  <p className="text-xs text-zinc-500">Provide a VPS to run your configs. Get a 90% discount.</p>
+                </div>
               </div>
-              <Button className="w-full md:w-auto bg-amber-600 hover:bg-amber-500 text-black font-black px-8 h-14 rounded-2xl whitespace-nowrap">Apply to Contribute</Button>
+
+              {backends.length > 0 && (
+                <div className="space-y-2 mb-4">
+                  {backends.map((b: any) => (
+                    <div key={b.id} className="flex items-center justify-between p-3 bg-zinc-950 rounded-xl border border-zinc-800">
+                      <div className="flex items-center gap-2">
+                        <Check size={12} className="text-emerald-500" />
+                        <span className="font-mono text-sm">{b.vps_ip}:{b.vps_port}</span>
+                        <Badge variant={b.status === 'active' ? 'default' : 'secondary'} className="text-[10px]">{b.status}</Badge>
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-400" onClick={async () => {
+                        await fetch(api(`/api/backends/${b.id}`), { ...FETCH_OPTS, method: 'DELETE' });
+                        setBackends(backends.filter((x: any) => x.id !== b.id));
+                        toast.success('Backend removed');
+                      }}><Trash2 size={14} /></Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Input value={backendIP} onChange={(e) => setBackendIP(e.target.value)} placeholder="VPS IP address" className="bg-zinc-950 border-zinc-800 flex-1" />
+                <Input value={backendPort} onChange={(e) => setBackendPort(e.target.value)} placeholder="Port" className="bg-zinc-950 border-zinc-800 w-20" />
+                <Button className="bg-amber-600 hover:bg-amber-500 text-black font-bold" onClick={handleRegisterBackend}>Register</Button>
+              </div>
+            </Card>
+
+            <Card className="border-zinc-800 bg-zinc-900/30 p-6">
+              <h4 className="font-bold mb-2 flex items-center gap-2"><Download size={16} className="text-emerald-500" /> Install Backend on VPS</h4>
+              <p className="text-xs text-zinc-500 mb-3">Run this command on your Ubuntu/Debian VPS to install Xray-core:</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 p-3 bg-zinc-950 rounded-lg text-xs text-emerald-400 font-mono overflow-x-auto whitespace-nowrap">
+                  bash &lt;(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/installer/backend-install.sh) {window.location.origin} YOUR_UUID
+                </code>
+                <Button variant="outline" className="border-zinc-800" onClick={() => {
+                  navigator.clipboard.writeText(`bash <(curl -fsSL https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/installer/backend-install.sh) ${window.location.origin} YOUR_UUID`);
+                  toast.success('Copied!');
+                }}><Copy size={14} /></Button>
+              </div>
             </Card>
           </div>
 

@@ -113,5 +113,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* Telegram Mini App */
+.tg-safe-top { padding-top: env(safe-area-inset-top, 0px); }
+.tg-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }

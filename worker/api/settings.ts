@@ -40,7 +40,31 @@ export async function handleSettings(
       .bind('integrations.%')
       .all<{ k: string; v: string }>();
 
-    const all = [...rows.results, ...rows2.results, ...rows3.results];
+    const rows4 = await env.DB.prepare(
+      'SELECT k, v FROM kvstore WHERE k LIKE ?'
+    )
+      .bind('disguise.%')
+      .all<{ k: string; v: string }>();
+
+    const rows5 = await env.DB.prepare(
+      'SELECT k, v FROM kvstore WHERE k LIKE ?'
+    )
+      .bind('ech.%')
+      .all<{ k: string; v: string }>();
+
+    const rows6 = await env.DB.prepare(
+      'SELECT k, v FROM kvstore WHERE k LIKE ?'
+    )
+      .bind('tls_fragment.%')
+      .all<{ k: string; v: string }>();
+
+    const rows7 = await env.DB.prepare(
+      'SELECT k, v FROM kvstore WHERE k LIKE ?'
+    )
+      .bind('tg.%')
+      .all<{ k: string; v: string }>();
+
+    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results];
     const settings: Record<string, any> = {};
     for (const row of all) {
       settings[row.k] = row.v;

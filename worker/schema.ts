@@ -44,6 +44,16 @@ CREATE TABLE IF NOT EXISTS kvstore (
   v TEXT,
   updated INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS backends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  vps_ip TEXT NOT NULL,
+  vps_port INTEGER DEFAULT 443,
+  vps_uuid TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  created_at INTEGER
+);
 `;
 
 const DEFAULT_PROTOCOLS = [
@@ -171,6 +181,38 @@ const DEFAULT_PROTOCOLS = [
     client_limit: 1,
     client_price: 0,
   },
+  {
+    id: 'vless-grpc',
+    name: 'VLESS + gRPC',
+    schema_json: JSON.stringify({
+      fields: [
+        { name: 'port', label: 'Port', type: 'number', default: 443 },
+        { name: 'uuid', label: 'UUID', type: 'text', required: true },
+        { name: 'sni', label: 'SNI', type: 'text', default: 'google.com' },
+        { name: 'serviceName', label: 'Service Name', type: 'text', default: 'grpc' },
+        { name: 'mode', label: 'gRPC Mode', type: 'select', default: 'gun', options: [
+          { label: 'Gun', value: 'gun' },
+          { label: 'Multi', value: 'multi' },
+        ]},
+      ],
+    }),
+    template_json: JSON.stringify({
+      inbound: {
+        port: '{{port}}',
+        protocol: 'vless',
+        settings: { clients: [{ id: '{{uuid}}' }] },
+        streamSettings: {
+          network: 'grpc',
+          security: 'tls',
+          tlsSettings: { serverName: '{{sni}}' },
+          grpcSettings: { serviceName: '{{serviceName}}' },
+        },
+      },
+    }),
+    price: 0,
+    client_limit: 1,
+    client_price: 0,
+  },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -183,6 +225,18 @@ const DEFAULT_SETTINGS = {
   'integrations.telegram_enabled': 'false',
   'integrations.ton_wallet_enabled': 'false',
   'integrations.external_server_url': '',
+  'disguise.enabled': 'false',
+  'disguise.admin_path': '',
+  'disguise.login_path': '',
+  'disguise.sub_path': '',
+  'disguise.fallback_page': '1101',
+  'ech.enabled': 'false',
+  'ech.sni': 'cloudflare-ech.com',
+  'ech.dns': 'https://dns.alidns.com/dns-query',
+  'tls_fragment.enabled': 'false',
+  'tls_fragment.mode': 'Shadowrocket',
+  'tg.bot_token': '',
+  'tg.chat_id': '',
 };
 
 async function hashPassword(password: string): Promise<string> {

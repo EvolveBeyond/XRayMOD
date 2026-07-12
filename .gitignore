@@ -6,6 +6,9 @@ build/
 dist/
 .wrangler/
 
+# Reference projects (cloned for research)
+.references/
+
 # Database files
 *.db
 *.db-journal

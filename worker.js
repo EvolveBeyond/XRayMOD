@@ -43,6 +43,16 @@ CREATE TABLE IF NOT EXISTS kvstore (
   v TEXT,
   updated INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS backends (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  vps_ip TEXT NOT NULL,
+  vps_port INTEGER DEFAULT 443,
+  vps_uuid TEXT DEFAULT '',
+  status TEXT DEFAULT 'pending',
+  created_at INTEGER
+);
 `;
 var DEFAULT_PROTOCOLS = [
   {
@@ -168,6 +178,38 @@ var DEFAULT_PROTOCOLS = [
     price: 0,
     client_limit: 1,
     client_price: 0
+  },
+  {
+    id: "vless-grpc",
+    name: "VLESS + gRPC",
+    schema_json: JSON.stringify({
+      fields: [
+        { name: "port", label: "Port", type: "number", default: 443 },
+        { name: "uuid", label: "UUID", type: "text", required: true },
+        { name: "sni", label: "SNI", type: "text", default: "google.com" },
+        { name: "serviceName", label: "Service Name", type: "text", default: "grpc" },
+        { name: "mode", label: "gRPC Mode", type: "select", default: "gun", options: [
+          { label: "Gun", value: "gun" },
+          { label: "Multi", value: "multi" }
+        ] }
+      ]
+    }),
+    template_json: JSON.stringify({
+      inbound: {
+        port: "{{port}}",
+        protocol: "vless",
+        settings: { clients: [{ id: "{{uuid}}" }] },
+        streamSettings: {
+          network: "grpc",
+          security: "tls",
+          tlsSettings: { serverName: "{{sni}}" },
+          grpcSettings: { serviceName: "{{serviceName}}" }
+        }
+      }
+    }),
+    price: 0,
+    client_limit: 1,
+    client_price: 0
   }
 ];
 var DEFAULT_SETTINGS = {
@@ -179,7 +221,19 @@ var DEFAULT_SETTINGS = {
   "financial.tax_fee": "2",
   "integrations.telegram_enabled": "false",
   "integrations.ton_wallet_enabled": "false",
-  "integrations.external_server_url": ""
+  "integrations.external_server_url": "",
+  "disguise.enabled": "false",
+  "disguise.admin_path": "",
+  "disguise.login_path": "",
+  "disguise.sub_path": "",
+  "disguise.fallback_page": "1101",
+  "ech.enabled": "false",
+  "ech.sni": "cloudflare-ech.com",
+  "ech.dns": "https://dns.alidns.com/dns-query",
+  "tls_fragment.enabled": "false",
+  "tls_fragment.mode": "Shadowrocket",
+  "tg.bot_token": "",
+  "tg.chat_id": ""
 };
 async function hashPassword(password) {
   const encoder = new TextEncoder();
@@ -1005,7 +1059,19 @@ async function handleSettings(request, env, _ctx, _params) {
     const rows3 = await env.DB.prepare(
       "SELECT k, v FROM kvstore WHERE k LIKE ?"
     ).bind("integrations.%").all();
-    const all = [...rows.results, ...rows2.results, ...rows3.results];
+    const rows4 = await env.DB.prepare(
+      "SELECT k, v FROM kvstore WHERE k LIKE ?"
+    ).bind("disguise.%").all();
+    const rows5 = await env.DB.prepare(
+      "SELECT k, v FROM kvstore WHERE k LIKE ?"
+    ).bind("ech.%").all();
+    const rows6 = await env.DB.prepare(
+      "SELECT k, v FROM kvstore WHERE k LIKE ?"
+    ).bind("tls_fragment.%").all();
+    const rows7 = await env.DB.prepare(
+      "SELECT k, v FROM kvstore WHERE k LIKE ?"
+    ).bind("tg.%").all();
+    const all = [...rows.results, ...rows2.results, ...rows3.results, ...rows4.results, ...rows5.results, ...rows6.results, ...rows7.results];
     const settings = {};
     for (const row of all) {
       settings[row.k] = row.v;
@@ -1024,6 +1090,166 @@ async function handleSettings(request, env, _ctx, _params) {
   return json7({ success: false, message: "Method not allowed" }, 405);
 }
 
+// --- Clean IP API ---
+async function handleCleanIP(request, env, _ctx, params) {
+  const action = params.action;
+  if (action === "scan" && request.method === "GET") {
+    const url = new URL(request.url);
+    const count = Math.min(parseInt(url.searchParams.get("count") || "16"), 32);
+    const port = parseInt(url.searchParams.get("port") || "-1");
+    const ips = await generateRandomIPs(request, count, port);
+    const ispInfo = getISPInfo(request);
+    return jsonResponse({ success: true, data: { ips, isp: ispInfo } });
+  }
+  if (action === "apply" && request.method === "POST") {
+    try { await requireAdmin(request, env.DB); } catch (e) { if (e instanceof Response) return e; return jsonResponse({ success: false, message: "Unauthorized" }, 401); }
+    try {
+      const body = await request.json();
+      const ips = body.ips || [];
+      const validIPs = ips.filter(ip => /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?$/.test(String(ip).trim()));
+      if (!validIPs.length) return jsonResponse({ success: false, message: "Invalid IP format" }, 400);
+      await setCleanIPs(env.DB, validIPs);
+      const carrier = detectIranianISP(request);
+      await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("cleanip.carrier", carrier, Date.now()).run();
+      return jsonResponse({ success: true, data: { count: validIPs.length, carrier } });
+    } catch { return jsonResponse({ success: false, message: "Invalid request" }, 400); }
+  }
+  if (action === "list" && request.method === "GET") {
+    try { await requireAdmin(request, env.DB); } catch (e) { if (e instanceof Response) return e; return jsonResponse({ success: false, message: "Unauthorized" }, 401); }
+    try {
+      const row = await env.DB.prepare("SELECT v, updated FROM kvstore WHERE k = ?").bind("cleanip.ips").first();
+      const carrierRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("cleanip.carrier").first();
+      return jsonResponse({ success: true, data: { ips: row ? row.v.split("\n").map(s => s.trim()).filter(Boolean) : [], carrier: carrierRow?.v || "unknown", updatedAt: row?.updated || 0 } });
+    } catch { return jsonResponse({ success: true, data: { ips: [], carrier: "unknown", updatedAt: 0 } }); }
+  }
+  if (!action || action === "") {
+    if (request.method === "GET") {
+      const ispInfo = getISPInfo(request);
+      const ips = await getCleanIPs(env.DB);
+      return jsonResponse({ success: true, data: { isp: ispInfo, activeIPs: ips.length } });
+    }
+  }
+  return jsonResponse({ success: false, message: "Not found" }, 404);
+}
+
+// --- Telegram Bot ---
+async function tgApi(botToken, method, payload) {
+  try { const r = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); return r.ok ? await r.json() : null; } catch (e) { console.error("[TG]", method, e); return null; }
+}
+async function sendBotMessage(botToken, chatId, text, replyMarkup) {
+  await tgApi(botToken, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text, ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+}
+function tgMainKeyboard(panelUrl, subUrl) {
+  return { inline_keyboard: [[{ text: "📊 وضعیت", callback_data: "m:status" }, { text: "🔗 اشتراک", callback_data: "m:sub" }], [{ text: "⚙️ کانفیگ", callback_data: "m:config" }, { text: "👥 کاربران", callback_data: "m:users" }], [{ text: "🖥 پنل", web_app: { url: panelUrl } }, { text: "🔄 منو", callback_data: "m:menu" }]] };
+}
+function tgWelcomeText() { return `<b>🛰 به ربات XrayMOD خوش آمدید</b>\n\n<blockquote>مدیریت پنل از تلگرام:\nدریافت لینک اشتراک، وضعیت و تنظیمات</blockquote>\n\nاز دکمه‌های زیر استفاده کنید 👇`; }
+function tgStatusText(host, userCount) {
+  const uptime = Date.now() - ((globalThis.__workerStart || Date.now()));
+  return `<b>╔═══❰📊 وضعیت ❱═══╗</b>\n\n<blockquote>⏱ <b>آپتایم:</b> <code>${Math.floor(uptime / 3600000)}h ${Math.floor((uptime % 3600000) / 60000)}m</code>\n🌐 <b>Host:</b> <code>${host}</code>\n👥 <b>کاربران:</b> <code>${userCount}</code></blockquote>\n\n<b>╚══════════════════╝</b>`;
+}
+function tgConfigText(cfg) { return `<b>⚙️ تنظیمات</b>\n\n<blockquote>پروتکل: <code>${cfg.protocol || "vless"}</code>\nTransport: <code>${cfg.transport || "ws"}</code>\nECH: ${cfg.ech ? "🟢" : "🔴"}\nTLS Fragment: ${cfg.tlsFrag ? "🟢" : "🔴"}</blockquote>`; }
+function tgUsersText(users) { if (!users.length) return "هیچ کاربری یافت نشد."; return `<b>👥 کاربران</b>\n\n` + users.slice(0, 10).map((u, i) => `${i + 1}. <code>${u.username}</code> — ${u.status === "active" ? "🟢" : "🔴"}`).join("\n"); }
+
+async function handleTelegramWebhook(request, env, _ctx) {
+  try {
+    const tgTokenRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tg.bot_token").first();
+    const tgChatRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tg.chat_id").first();
+    if (!tgTokenRow?.v) return new Response("Bot not configured", { status: 200 });
+    const botToken = tgTokenRow.v;
+    const allowedChatId = tgChatRow?.v || "";
+    const update = await request.json();
+    const url = new URL(request.url);
+    const host = url.host;
+    const protocol = url.protocol;
+
+    if (update.callback_query) {
+      const cq = update.callback_query;
+      const cbChat = String(cq.message?.chat?.id || "").trim();
+      if (allowedChatId && cbChat !== allowedChatId) return new Response("Unauthorized", { status: 200 });
+      await tgApi(botToken, "answerCallbackQuery", { callback_query_id: cq.id });
+      const data = cq.data || "";
+      let sendText = null, showKb = false;
+      const userRow = await env.DB.prepare("SELECT uuid FROM users WHERE role = ?").bind("admin").first();
+      const subUrl = `${protocol}//${host}/sub/${userRow?.uuid || ""}`;
+      const panelUrl = `${protocol}//${host}`;
+      const kb = tgMainKeyboard(panelUrl, subUrl);
+
+      if (data === "m:status") {
+        const users = await env.DB.prepare("SELECT COUNT(*) as count FROM users").first();
+        sendText = tgStatusText(host, users?.count || 0);
+      } else if (data === "m:config") {
+        const echRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("ech.enabled").first();
+        const fragRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tls_fragment.enabled").first();
+        sendText = tgConfigText({ protocol: "vless", transport: "ws", ech: echRow?.v === "true", tlsFrag: fragRow?.v === "true" });
+      } else if (data === "m:sub") {
+        sendText = `<b>🔗 لینک اشتراک:</b>\n<code>${subUrl}</code>`;
+      } else if (data === "m:users") {
+        const users = await env.DB.prepare("SELECT username, status FROM users LIMIT 10").all();
+        sendText = tgUsersText(users.results);
+      } else if (data === "m:menu") {
+        sendText = tgWelcomeText(); showKb = true;
+      }
+      if (sendText) await sendBotMessage(botToken, cbChat, sendText, showKb ? kb : undefined);
+      return new Response("OK", { status: 200 });
+    }
+
+    if (!update.message?.text) return new Response("OK", { status: 200 });
+    const chatId = String(update.message.chat.id).trim();
+    if (allowedChatId && chatId !== allowedChatId) return new Response("Unauthorized", { status: 200 });
+    const text = update.message.text.trim();
+    const cmd = text.split(" ")[0].toLowerCase();
+    const userRow = await env.DB.prepare("SELECT uuid FROM users WHERE role = ?").bind("admin").first();
+    const subUrl = `${protocol}//${host}/sub/${userRow?.uuid || ""}`;
+    const panelUrl = `${protocol}//${host}`;
+    const kb = tgMainKeyboard(panelUrl, subUrl);
+
+    switch (cmd) {
+      case "/start": case "/menu": await sendBotMessage(botToken, chatId, tgWelcomeText(), kb); break;
+      case "/sub": await sendBotMessage(botToken, chatId, `<b>🔗 لینک اشتراک:</b>\n<code>${subUrl}</code>`, kb); break;
+      case "/status": { const u = await env.DB.prepare("SELECT COUNT(*) as count FROM users").first(); await sendBotMessage(botToken, chatId, tgStatusText(host, u?.count || 0), kb); break; }
+      case "/config": { const ech = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("ech.enabled").first(); const f = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tls_fragment.enabled").first(); await sendBotMessage(botToken, chatId, tgConfigText({ protocol: "vless", transport: "ws", ech: ech?.v === "true", tlsFrag: f?.v === "true" }), kb); break; }
+      case "/users": { const u = await env.DB.prepare("SELECT username, status FROM users LIMIT 10").all(); await sendBotMessage(botToken, chatId, tgUsersText(u.results), kb); break; }
+      case "/help": await sendBotMessage(botToken, chatId, "<b>📋 راهنما</b>\n\n<code>/start</code> منوی اصلی\n<code>/sub</code> لینک اشتراک\n<code>/status</code> وضعیت\n<code>/config</code> تنظیمات\n<code>/users</code> کاربران", kb); break;
+      default: await sendBotMessage(botToken, chatId, "دستور ناشناخته. از /help استفاده کنید.", kb);
+    }
+    return new Response("OK", { status: 200 });
+  } catch (e) { console.error("[TG] Webhook error:", e); return new Response("OK", { status: 200 }); }
+}
+
+async function handleTelegramLogin(request, env, _ctx) {
+  const url = new URL(request.url);
+  const chatId = url.searchParams.get("chat_id") || "";
+  const token = url.searchParams.get("token") || "";
+  if (!chatId || !token) return new Response("Invalid login link", { status: 400 });
+  const adminRow = await env.DB.prepare("SELECT id, role FROM users WHERE role = ?").bind("admin").first();
+  if (!adminRow) return new Response("Admin not found", { status: 500 });
+  const sessionToken = crypto.randomUUID();
+  await env.DB.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind(`session:${sessionToken}`, JSON.stringify({ userId: adminRow.id, role: adminRow.role, created: Date.now() }), Date.now()).run();
+  return new Response(null, { status: 302, headers: { Location: "/", "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=604800` } });
+}
+
+// --- Backends API ---
+async function handleBackends(request, env, _ctx, params) {
+  try { await requireAdmin(request, env.DB); } catch (e) { if (e instanceof Response) return e; return jsonResponse({ success: false, message: "Unauthorized" }, 401); }
+  if (request.method === "GET") {
+    const rows = await env.DB.prepare("SELECT * FROM backends ORDER BY created_at DESC").all();
+    return jsonResponse({ success: true, data: rows.results });
+  }
+  if (request.method === "POST") {
+    const body = await request.json();
+    if (!body.vps_ip || !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(body.vps_ip)) return jsonResponse({ success: false, message: "Invalid IP" }, 400);
+    const adminRow = await env.DB.prepare("SELECT id FROM users WHERE role = ?").bind("admin").first();
+    const userRow = await env.DB.prepare("SELECT uuid FROM users WHERE id = ?").bind(adminRow?.id || 1).first();
+    await env.DB.prepare("INSERT INTO backends (user_id, vps_ip, vps_port, vps_uuid, status, created_at) VALUES (?, ?, ?, ?, ?, ?)").bind(adminRow?.id || 1, body.vps_ip, body.vps_port || 443, userRow?.uuid || "", "active", Date.now()).run();
+    return jsonResponse({ success: true });
+  }
+  if (request.method === "DELETE" && params.id) {
+    await env.DB.prepare("DELETE FROM backends WHERE id = ?").bind(Number(params.id)).run();
+    return jsonResponse({ success: true });
+  }
+  return jsonResponse({ success: false, message: "Not allowed" }, 405);
+}
+
 // worker/subscription.ts
 function json8(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -1039,94 +1265,78 @@ function text(content, status = 200) {
 }
 async function handleSubscription(request, env, _ctx, params) {
   const token = params.token;
-  if (!token) {
-    return text("Invalid subscription link", 400);
+  if (!token) return text("Invalid subscription link", 400);
+  const user = await env.DB.prepare("SELECT id, username, uuid, traffic_limit, traffic_used, expiry_date, status FROM users WHERE uuid = ?").bind(token).first();
+  if (!user) return text("Invalid subscription", 404);
+  if (user.status !== "active") return text("Account is not active", 403);
+  if (user.expiry_date && new Date(user.expiry_date) < new Date()) return text("Subscription expired", 403);
+  const configs = await env.DB.prepare(`SELECT c.*, p.id as proto_id, p.name as proto_name, p.schema_json, p.template_json FROM configs c LEFT JOIN protocols p ON c.protocol_id = p.id WHERE c.user_id = ?`).bind(user.id).all();
+  if (configs.results.length === 0) return text("No configurations available");
+
+  // Get ECH and TLS fragment settings
+  const echRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("ech.enabled").first();
+  const echSniRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("ech.sni").first();
+  const echDnsRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("ech.dns").first();
+  const tlsFragRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tls_fragment.enabled").first();
+  const tlsFragModeRow = await env.DB.prepare("SELECT v FROM kvstore WHERE k = ?").bind("tls_fragment.mode").first();
+  const echEnabled = echRow?.v === "true";
+  const echSni = echSniRow?.v || "cloudflare-ech.com";
+  const echDns = echDnsRow?.v || "https://dns.alidns.com/dns-query";
+  const tlsFragEnabled = tlsFragRow?.v === "true";
+  const tlsFragMode = tlsFragModeRow?.v || "Shadowrocket";
+  const echParam = echEnabled ? `&ech=${encodeURIComponent((echSni ? echSni + "+" : "") + echDns)}` : "";
+  const tlsFragParam = tlsFragEnabled ? (tlsFragMode === "Shadowrocket" ? `&fragment=${encodeURIComponent("1,40-60,30-50,tlshello")}` : `&fragment=${encodeURIComponent("3,1,tlshello")}`) : "";
+
+  // Get clean IPs for server address
+  const cleanIPs = await getCleanIPs(env.DB);
+  const subUrl = new URL(request.url);
+  let host = subUrl.host;
+  // Check if user has a backend VPS
+  const backendRow = await env.DB.prepare("SELECT vps_ip, vps_port FROM backends WHERE user_id = ? AND status = ?").bind(user.id, "active").first();
+  if (backendRow) {
+    host = backendRow.vps_port === 443 ? backendRow.vps_ip : `${backendRow.vps_ip}:${backendRow.vps_port}`;
+  } else if (cleanIPs.length > 0) {
+    host = cleanIPs[0].split(":")[0];
   }
-  const user = await env.DB.prepare(
-    "SELECT id, username, uuid, traffic_limit, traffic_used, expiry_date, status FROM users WHERE uuid = ?"
-  ).bind(token).first();
-  if (!user) {
-    return text("Invalid subscription", 404);
-  }
-  if (user.status !== "active") {
-    return text("Account is not active", 403);
-  }
-  if (user.expiry_date && new Date(user.expiry_date) < /* @__PURE__ */ new Date()) {
-    return text("Subscription expired", 403);
-  }
-  const configs = await env.DB.prepare(
-    `SELECT c.*, p.id as proto_id, p.name as proto_name, p.schema_json, p.template_json
-     FROM configs c
-     LEFT JOIN protocols p ON c.protocol_id = p.id
-     WHERE c.user_id = ?`
-  ).bind(user.id).all();
-  if (configs.results.length === 0) {
-    return text("No configurations available");
-  }
+
   const accept = request.headers.get("Accept") || "";
-  const url = new URL(request.url);
-  const format = url.searchParams.get("format") || "base64";
+  const format = subUrl.searchParams.get("format") || "base64";
   const links = [];
   for (const config of configs.results) {
     const settings = JSON.parse(config.settings_json || "{}");
-    const template = config.template_json;
-    let processedTemplate = template;
-    const templateData = { ...settings, uuid: user.uuid };
-    for (const [key, value] of Object.entries(templateData)) {
-      const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-      processedTemplate = processedTemplate.replace(regex, String(value));
-    }
     const port = config.port || 443;
-    const host = settings.host || settings.sni || "example.com";
     let uri = "";
     switch (config.proto_id) {
       case "vless-reality":
       case "vless-ws":
+      case "vless-wss":
+        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=${settings.security || "tls"}&type=${settings.network || "tcp"}&flow=${settings.flow || ""}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
+        break;
       case "vless-grpc":
-        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=${settings.security || "tls"}&type=${settings.network || "tcp"}&flow=${settings.flow || ""}#${encodeURIComponent(config.name)}`;
+        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=tls&type=grpc&mode=${settings.mode || "gun"}&serviceName=${settings.serviceName || "grpc"}&sni=${settings.sni || host}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
         break;
       case "vmess-ws":
       case "vmess-wss":
-        const vmessObj = {
-          v: "2",
-          ps: config.name,
-          add: host,
-          port,
-          id: user.uuid,
-          aid: 0,
-          scy: "auto",
-          net: settings.network || "ws",
-          type: "none",
-          host,
-          path: settings.path || "/",
-          tls: settings.security === "tls" ? "tls" : ""
-        };
-        uri = `vmess://${btoa(JSON.stringify(vmessObj))}`;
+        uri = `vmess://${btoa(JSON.stringify({ v: "2", ps: config.name, add: host, port, id: user.uuid, aid: 0, scy: "auto", net: settings.network || "ws", type: "none", host, path: settings.path || "/", tls: settings.security === "tls" ? "tls" : "" }))}`;
         break;
       case "trojan-ws":
       case "trojan-wss":
-        uri = `trojan://${settings.password || "password"}@${host}:${port}?type=${settings.network || "ws"}&host=${host}&path=${settings.path || "/"}&security=tls&sni=${settings.sni || host}#${encodeURIComponent(config.name)}`;
+        uri = `trojan://${settings.password || "password"}@${host}:${port}?type=${settings.network || "ws"}&host=${host}&path=${settings.path || "/"}&security=tls&sni=${settings.sni || host}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
         break;
       case "ss-ws":
       case "ss-wss":
-        const ssInfo = btoa(`${settings.method || "chacha20-ietf-poly1305"}:${settings.password || "password"}`);
-        uri = `ss://${ssInfo}@${host}:${port}?type=${settings.network || "ws"}&path=${settings.path || "/"}#${encodeURIComponent(config.name)}`;
+        uri = `ss://${btoa(`${settings.method || "chacha20-ietf-poly1305"}:${settings.password || "password"}`)}@${host}:${port}?type=${settings.network || "ws"}&path=${settings.path || "/"}#${encodeURIComponent(config.name)}`;
         break;
       default:
-        uri = `${config.proto_id}://${btoa(processedTemplate)}@${host}:${port}#${encodeURIComponent(config.name)}`;
+        uri = `${config.proto_id}://${btoa(config.template_json)}@${host}:${port}#${encodeURIComponent(config.name)}`;
     }
     links.push(uri);
   }
-  if (format === "clash" || accept.includes("text/yaml")) {
-    return generateClashConfig(links, configs.results, user);
-  }
-  if (format === "singbox" || accept.includes("application/json")) {
-    return generateSingboxConfig(links, configs.results, user);
-  }
-  const base64Config = btoa(links.join("\n"));
-  return text(base64Config);
+  if (format === "clash" || accept.includes("text/yaml")) return generateClashConfig(links, configs.results, user, echEnabled, echSni);
+  if (format === "singbox" || accept.includes("application/json")) return generateSingboxConfig(links, configs.results, user, echEnabled, echSni);
+  return text(btoa(links.join("\n")));
 }
-function generateClashConfig(links, configs, user) {
+function generateClashConfig(links, configs, user, echEnabled = false, echSni = "cloudflare-ech.com") {
   const proxies = [];
   const proxyNames = [];
   for (let i = 0; i < configs.length; i++) {
@@ -1134,17 +1344,16 @@ function generateClashConfig(links, configs, user) {
     const settings = JSON.parse(config.settings_json || "{}");
     const name = config.name || `Config ${i + 1}`;
     proxyNames.push(name);
-    const proxy = {
-      name,
-      type: getClashProxyType(config.proto_id),
-      server: settings.host || settings.sni || "example.com",
-      port: config.port || 443,
-      uuid: user.uuid
-    };
+    const proxy = { name, type: getClashProxyType(config.proto_id), server: settings.host || settings.sni || "example.com", port: config.port || 443, uuid: user.uuid };
     if (config.proto_id.includes("vless")) {
       proxy.flow = settings.flow || "";
       proxy.tls = settings.security === "tls" || settings.security === "reality";
       if (settings.sni) proxy.sni = settings.sni;
+      if (config.proto_id === "vless-grpc") {
+        proxy.network = "grpc";
+        proxy["grpc-opts"] = { "grpc-service-name": settings.serviceName || "grpc" };
+      }
+      if (echEnabled) proxy["ech-opts"] = { enable: true, "query-server-name": echSni };
     }
     if (config.proto_id.includes("vmess")) {
       proxy.network = settings.network || "ws";
@@ -1162,65 +1371,32 @@ function generateClashConfig(links, configs, user) {
     }
     proxies.push(proxy);
   }
-  const clashConfig = {
-    "mixed-port": 7890,
-    "allow-lan": false,
-    "mode": "rule",
-    "proxies": proxies,
-    "proxy-groups": [
-      {
-        "name": "Proxy",
-        "type": "select",
-        "proxies": [...proxyNames, "DIRECT"]
-      }
-    ],
-    "rules": ["MATCH,Proxy"]
-  };
-  return new Response(
-    `proxies:
-${JSON.stringify(clashConfig, null, 2).split("\n").map((l) => "  " + l).join("\n")}`,
-    {
-      headers: { "Content-Type": "text/yaml; charset=utf-8" }
-    }
-  );
+  const clashConfig = { "mixed-port": 7890, "allow-lan": false, "mode": "rule", "proxies": proxies, "proxy-groups": [{ "name": "Proxy", "type": "select", "proxies": [...proxyNames, "DIRECT"] }], "rules": ["MATCH,Proxy"] };
+  return new Response(`proxies:\n${JSON.stringify(clashConfig, null, 2).split("\n").map((l) => "  " + l).join("\n")}`, { headers: { "Content-Type": "text/yaml; charset=utf-8" } });
 }
-function generateSingboxConfig(links, configs, user) {
+function generateSingboxConfig(links, configs, user, echEnabled = false, echSni = "cloudflare-ech.com") {
   const outbounds = [];
   for (let i = 0; i < configs.length; i++) {
     const config = configs[i];
     const settings = JSON.parse(config.settings_json || "{}");
     const name = config.name || `Config ${i + 1}`;
-    const outbound = {
-      type: getSingboxOutboundType(config.proto_id),
-      tag: name,
-      server: settings.host || settings.sni || "example.com",
-      server_port: config.port || 443,
-      uuid: user.uuid
-    };
+    const outbound = { type: getSingboxOutboundType(config.proto_id), tag: name, server: settings.host || settings.sni || "example.com", server_port: config.port || 443, uuid: user.uuid };
     if (config.proto_id.includes("vless")) {
       outbound.flow = settings.flow || "";
       if (settings.security === "tls") {
         outbound.tls = { enabled: true, server_name: settings.sni || settings.host };
+        if (echEnabled) outbound.tls.ech = { enabled: true, query_server_name: echSni };
+      }
+      if (config.proto_id === "vless-grpc") {
+        outbound.transport = { type: "grpc", serviceName: settings.serviceName || "grpc" };
       }
     }
     if (config.proto_id.includes("vmess")) {
-      outbound.transport = {
-        type: settings.network || "ws",
-        path: settings.path || "/"
-      };
+      outbound.transport = { type: settings.network || "ws", path: settings.path || "/" };
     }
     outbounds.push(outbound);
   }
-  const singboxConfig = {
-    outbounds,
-    inbounds: [
-      {
-        type: "mixed",
-        listen: "127.0.0.1",
-        listen_port: 2080
-      }
-    ]
-  };
+  const singboxConfig = { outbounds, inbounds: [{ type: "mixed", listen: "127.0.0.1", listen_port: 2080 }] };
   return json8(singboxConfig);
 }
 function getClashProxyType(protoId) {
@@ -1491,6 +1667,12 @@ var routes = [
   { pattern: new URLPattern({ pathname: "/api/configs" }), handler: handleConfigs },
   { pattern: new URLPattern({ pathname: "/api/configs/:id" }), handler: handleConfigs },
   { pattern: new URLPattern({ pathname: "/api/settings" }), handler: handleSettings },
+  { pattern: new URLPattern({ pathname: "/api/cleanip" }), handler: handleCleanIP },
+  { pattern: new URLPattern({ pathname: "/api/cleanip/:action" }), handler: handleCleanIP },
+  { pattern: new URLPattern({ pathname: "/api/backends" }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: "/api/backends/:id" }), handler: handleBackends },
+  { pattern: new URLPattern({ pathname: "/bot" }), handler: handleTelegramWebhook },
+  { pattern: new URLPattern({ pathname: "/admin" }), handler: handleTelegramLogin },
   { pattern: new URLPattern({ pathname: "/sub/:token" }), handler: handleSubscription }
 ];
 var FALLBACK_HTML = `<!DOCTYPE html>
@@ -1523,6 +1705,71 @@ var FALLBACK_HTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+// --- Utility Functions ---
+function detectIranianISP(request) {
+  const cf = (request && request.cf) || {};
+  const org = String(cf.asOrganization || "").toLowerCase();
+  const asn = Number(cf.asn || 0);
+  const country = String(cf.country || "").toUpperCase();
+  if (country !== "IR") return "all";
+  if (asn === 44244 || org.includes("irancell") || org.includes("mtn")) return "mtn";
+  if (asn === 197207 || org.includes("mcci") || org.includes("hamrah")) return "mci";
+  if (asn === 57218 || org.includes("rightel")) return "rightel";
+  if (asn === 31549 || org.includes("shatel")) return "shatel";
+  return "ir";
+}
+function getISPInfo(request) {
+  const cf = (request && request.cf) || {};
+  return { asn: cf.asn || 0, isp: cf.asOrganization || "", country: cf.country || "", carrier: detectIranianISP(request) };
+}
+const _cidrListCache = new Map();
+const CF_PORTS = [443, 2053, 2083, 2087, 2096, 8443];
+function ipToInt(ip) { const p = ip.split(".").map(Number); return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3]; }
+function intToIp(n) { return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF].join("."); }
+function randomIPFromCIDR(cidr) {
+  const [base, prefixStr] = cidr.split("/");
+  const hostBits = 32 - parseInt(prefixStr);
+  const ipInt = ipToInt(base);
+  const mask = (0xFFFFFFFF << hostBits) >>> 0;
+  return intToIp(((ipInt & mask) >>> 0) + Math.floor(Math.random() * Math.pow(2, hostBits)));
+}
+async function fetchCIDRList(carrier) {
+  const now = Date.now();
+  const cached = _cidrListCache.get(carrier);
+  if (cached && now - cached.at < 3600000) return cached.list;
+  try {
+    const r = await fetch("https://raw.githubusercontent.com/Leon406/SubCrawler/master/sub/cf/cloudflare_v4.txt", { headers: { "User-Agent": "XRayMOD" }, cf: { cacheTtl: 1800, cacheEverything: true } });
+    const text = r.ok ? await r.text() : "104.16.0.0/13";
+    const list = text.split(/[\r\n,;]+/).map(s => s.trim()).filter(s => s && /^\d+\.\d+\.\d+\.\d+\/\d+$/.test(s));
+    _cidrListCache.set(carrier, { at: now, list: list.length ? list : ["104.16.0.0/13"] });
+    return _cidrListCache.get(carrier).list;
+  } catch { return ["104.16.0.0/13"]; }
+}
+async function generateRandomIPs(request, count = 16, port = -1) {
+  const carrier = detectIranianISP(request);
+  const cidrList = await fetchCIDRList(carrier);
+  return Array.from({ length: count }, () => {
+    const ip = randomIPFromCIDR(cidrList[Math.floor(Math.random() * cidrList.length)]);
+    const targetPort = port === -1 ? CF_PORTS[Math.floor(Math.random() * CF_PORTS.length)] : port;
+    return `${ip}:${targetPort}`;
+  });
+}
+async function getCleanIPs(db) {
+  try { const row = await db.prepare("SELECT v FROM kvstore WHERE k = ?").bind("cleanip.ips").first(); return row && row.v ? row.v.split("\n").map(s => s.trim()).filter(Boolean) : []; } catch { return []; }
+}
+async function setCleanIPs(db, ips) {
+  const unique = [...new Set(ips)].slice(0, 30);
+  await db.prepare("INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)").bind("cleanip.ips", unique.join("\n"), Date.now()).run();
+}
+function isGrpcRequest(request) { return (request.headers.get("Content-Type") || "").startsWith("application/grpc"); }
+function isXHTTPRequest(request) {
+  const referer = request.headers.get("Referer") || "";
+  if (referer.includes("x_padding")) return true;
+  const contentType = request.headers.get("Content-Type") || "";
+  if (contentType.includes("application/octet-stream") && request.method === "POST") return true;
+  return false;
+}
+
 function errorPage(msg) {
   return new Response(`<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>XrayMOD Error</title>
@@ -1535,6 +1782,128 @@ p{color:#a1a1aa;font-size:.875rem}</style></head>
     headers: { "Content-Type": "text/html" }
   });
 }
+
+// --- Disguise System (Error 1101 bypass) ---
+var EMPTY_DISGUISE = { on: false, adminPath: "", loginPath: "", subPath: "", pubAdmin: "/admin", pubLogin: "/login", fallbackPage: "1101" };
+function cleanPath(v) {
+  return String(v || "").trim().toLowerCase().replace(/^\/+|\/+$/g, "").replace(/[^a-z0-9_-]/g, "").slice(0, 40);
+}
+async function getDisguiseConfig(env, db) {
+  try {
+    if (env.PANEL_RECOVERY === "1" || env.PANEL_RECOVERY === "true") return { ...EMPTY_DISGUISE };
+    const rows = await db.prepare("SELECT k, v FROM kvstore WHERE k LIKE ?").bind("disguise.%").all();
+    const settings = {};
+    for (const row of rows.results) settings[row.k] = row.v;
+    const enabled = settings["disguise.enabled"] === "true";
+    const adminPath = cleanPath(env.ADMIN_PATH) || cleanPath(settings["disguise.admin_path"]);
+    const loginPath = cleanPath(env.LOGIN_PATH) || cleanPath(settings["disguise.login_path"]);
+    const subPath = cleanPath(env.SUB_PATH) || cleanPath(settings["disguise.sub_path"]);
+    const on = (enabled || !!(env.ADMIN_PATH || env.LOGIN_PATH || env.SUB_PATH)) && !!(adminPath || loginPath || subPath);
+    if (!on) return { ...EMPTY_DISGUISE, fallbackPage: settings["disguise.fallback_page"] || "1101" };
+    return { on: true, adminPath, loginPath, subPath, pubAdmin: adminPath ? "/" + adminPath : "/admin", pubLogin: loginPath ? "/" + loginPath : "/login", fallbackPage: env.DISGUISE_PAGE || settings["disguise.fallback_page"] || "1101" };
+  } catch (e) { return { ...EMPTY_DISGUISE }; }
+}
+function remapDisguisePath(pathname, config) {
+  if (!config.on) return { remapped: pathname, isDecoy: false };
+  const clean = pathname.toLowerCase().replace(/\/+$/, "");
+  if (config.adminPath && clean === "/" + config.adminPath) return { remapped: "/admin", isDecoy: false };
+  if (config.adminPath && clean.startsWith("/" + config.adminPath + "/")) return { remapped: "/admin" + clean.slice(config.adminPath.length + 1), isDecoy: false };
+  if (config.loginPath && clean === "/" + config.loginPath) return { remapped: "/login", isDecoy: false };
+  if (config.subPath && clean === "/" + config.subPath) return { remapped: "/sub", isDecoy: false };
+  if (config.subPath && clean.startsWith("/" + config.subPath + "/")) return { remapped: "/sub" + clean.slice(config.subPath.length + 1), isDecoy: false };
+  if (clean === "/admin" || clean === "/login") return { remapped: pathname, isDecoy: true };
+  return { remapped: pathname, isDecoy: false };
+}
+function html1101(host) {
+  const now = new Date();
+  const ts = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0") + ":" + String(now.getSeconds()).padStart(2, "0");
+  const rayId = Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b => b.toString(16).padStart(2, "0")).join("");
+  return `<!DOCTYPE html>
+<!--[if lt IE 7]> <html class="no-js ie6 oldie" lang="en-US"> <![endif]-->
+<!--[if IE 7]>    <html class="no-js ie7 oldie" lang="en-US"> <![endif]-->
+<!--[if IE 8]>    <html class="no-js ie8 oldie" lang="en-US"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en-US"> <!--<![endif]-->
+<head>
+<title>Worker threw exception | ${host} | Cloudflare</title>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" id="cf_styles-css" href="/cdn-cgi/styles/cf.errors.css" />
+<!--[if lt IE 9]><link rel="stylesheet" id='cf_styles-ie.css' href="/cdn-cgi/styles/cf.errors.ie.css" /><![endif]-->
+<style>body{margin:0;padding:0}</style>
+<!--[if gte IE 10]><!-->
+<script>
+  if (!navigator.cookieEnabled) {
+    window.addEventListener('DOMContentLoaded', function () {
+      var cookieEl = document.getElementById('cookie-alert');
+      cookieEl.style.display = 'block';
+    })
+  }
+</script>
+<!--<![endif]-->
+</head>
+<body>
+    <div id="cf-wrapper">
+        <div class="cf-alert cf-alert-error cf-cookie-error" id="cookie-alert" data-translate="enable_cookies">Please enable cookies.</div>
+        <div id="cf-error-details" class="cf-error-details-wrapper">
+            <div class="cf-wrapper cf-header cf-error-overview">
+                <h1>
+                    <span class="cf-error-type" data-translate="error">Error</span>
+                    <span class="cf-error-code">1101</span>
+                    <small class="heading-ray-id">Ray ID: ${rayId} &bull; ${ts} UTC</small>
+                </h1>
+                <h2 class="cf-subheadline" data-translate="error_desc">Worker threw exception</h2>
+            </div>
+            <section></section>
+            <div class="cf-section cf-wrapper">
+                <div class="cf-columns two">
+                    <div class="cf-column">
+                        <h2 data-translate="what_happened">What happened?</h2>
+                        <p>You've requested a page on a website (${host}) that is on the <a href="https://www.cloudflare.com/5xx-error-landing?utm_source=error_100x" target="_blank">Cloudflare</a> network. An unknown error occurred while rendering the page.</p>
+                    </div>
+                    <div class="cf-column">
+                        <h2 data-translate="what_can_i_do">What can I do?</h2>
+                        <p><strong>If you are the owner of this website:</strong><br />refer to <a href="https://developers.cloudflare.com/workers/observability/errors/" target="_blank">Workers - Errors and Exceptions</a> and check Workers Logs for ${host}.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="cf-section cf-wrapper">
+                <h2 data-translate="more_info">More information</h2>
+                <p>If you are the owner of this website, you can check <a href="https://developers.cloudflare.com/workers/observability/errors/" target="_blank">Workers Logs</a> for ${host} to learn more about this error.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
+}
+function nginxPage() {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+  body { width: 35em; margin: 0 auto; font-family: Tahoma, Verdana, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>`;
+}
+function getDecoyResponse(host, pageType) {
+  const html = pageType === "1101" ? html1101(host) : nginxPage();
+  return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=UTF-8" } });
+}
+
 async function handleRequest(request, env, ctx) {
   try {
     if (request.method === "OPTIONS") {
@@ -1553,7 +1922,19 @@ async function handleRequest(request, env, ctx) {
     if (request.headers.get("Upgrade") === "websocket") {
       return handleProxyTraffic(request, env, ctx);
     }
-    const skipInstallCheck = url.pathname.startsWith("/install") || url.pathname.startsWith("/api/") || url.pathname.startsWith("/sub/");
+    // gRPC/XHTTP transport — POST-based proxy traffic
+    if (request.method === "POST" && !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/install")) {
+      if (isGrpcRequest(request)) return handleProxyTraffic(request, env, ctx);
+      if (isXHTTPRequest(request)) return handleProxyTraffic(request, env, ctx);
+    }
+    let pathname = url.pathname;
+    const disguise = await getDisguiseConfig(env, env.DB);
+    if (disguise.on) {
+      const { remapped, isDecoy } = remapDisguisePath(pathname, disguise);
+      if (isDecoy) return getDecoyResponse(url.host, disguise.fallbackPage);
+      if (remapped !== pathname) { pathname = remapped; url.pathname = pathname; }
+    }
+    const skipInstallCheck = pathname.startsWith("/install") || pathname.startsWith("/api/") || pathname.startsWith("/sub/");
     if (!skipInstallCheck) {
       try {
         const configured = await env.DB.prepare(
@@ -1578,6 +1959,9 @@ async function handleRequest(request, env, ctx) {
         }
         return route.handler(request, env, ctx, params);
       }
+    }
+    if (disguise.on && !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/sub/") && !url.pathname.startsWith("/install")) {
+      return getDecoyResponse(url.host, disguise.fallbackPage);
     }
     const pagesUrl = env.PAGES_URL;
     if (pagesUrl && !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/sub/")) {

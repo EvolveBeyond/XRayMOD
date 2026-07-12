@@ -1,4 +1,5 @@
 import type { Env } from './types';
+import { getCleanIPs } from './utils';
 
 function json(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -58,9 +59,44 @@ export async function handleSubscription(
     return text('No configurations available');
   }
 
+  // Get ECH and TLS fragment settings
+  const echRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('ech.enabled').first<{ v: string }>();
+  const echSniRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('ech.sni').first<{ v: string }>();
+  const echDnsRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('ech.dns').first<{ v: string }>();
+  const tlsFragRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('tls_fragment.enabled').first<{ v: string }>();
+  const tlsFragModeRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('tls_fragment.mode').first<{ v: string }>();
+
+  const echEnabled = echRow?.v === 'true';
+  const echSni = echSniRow?.v || 'cloudflare-ech.com';
+  const echDns = echDnsRow?.v || 'https://dns.alidns.com/dns-query';
+  const tlsFragEnabled = tlsFragRow?.v === 'true';
+  const tlsFragMode = tlsFragModeRow?.v || 'Shadowrocket';
+
+  // Build ECH and TLS fragment link params
+  const echParam = echEnabled ? `&ech=${encodeURIComponent((echSni ? echSni + '+' : '') + echDns)}` : '';
+  const tlsFragParam = tlsFragEnabled
+    ? tlsFragMode === 'Shadowrocket'
+      ? `&fragment=${encodeURIComponent('1,40-60,30-50,tlshello')}`
+      : `&fragment=${encodeURIComponent('3,1,tlshello')}`
+    : '';
+
+  // Get clean IPs for server address
+  const cleanIPs = await getCleanIPs(env.DB);
+  const url = new URL(request.url);
+
+  // Check if user has a backend VPS
+  let host = url.host;
+  const backendRow = await env.DB.prepare('SELECT vps_ip, vps_port FROM backends WHERE user_id = ? AND status = ?')
+    .bind(user.id, 'active')
+    .first<{ vps_ip: string; vps_port: number }>();
+  if (backendRow) {
+    host = backendRow.vps_port === 443 ? backendRow.vps_ip : `${backendRow.vps_ip}:${backendRow.vps_port}`;
+  } else if (cleanIPs.length > 0) {
+    host = cleanIPs[0].split(':')[0];
+  }
+
   // Check Accept header for format preference
   const accept = request.headers.get('Accept') || '';
-  const url = new URL(request.url);
   const format = url.searchParams.get('format') || 'base64';
 
   // Generate links for each config
@@ -78,15 +114,18 @@ export async function handleSubscription(
     }
 
     const port = config.port || 443;
-    const host = settings.host || settings.sni || 'example.com';
 
     // Generate URI based on protocol
     let uri = '';
     switch (config.proto_id) {
       case 'vless-reality':
       case 'vless-ws':
+      case 'vless-wss':
+        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=${settings.security || 'tls'}&type=${settings.network || 'tcp'}&flow=${settings.flow || ''}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
+        break;
       case 'vless-grpc':
-        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=${settings.security || 'tls'}&type=${settings.network || 'tcp'}&flow=${settings.flow || ''}#${encodeURIComponent(config.name)}`;
+        const grpcMode = settings.mode || 'gun';
+        uri = `vless://${user.uuid}@${host}:${port}?encryption=none&security=tls&type=grpc&mode=${grpcMode}&serviceName=${settings.serviceName || 'grpc'}&sni=${settings.sni || host}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
         break;
       case 'vmess-ws':
       case 'vmess-wss':
@@ -108,7 +147,7 @@ export async function handleSubscription(
         break;
       case 'trojan-ws':
       case 'trojan-wss':
-        uri = `trojan://${settings.password || 'password'}@${host}:${port}?type=${settings.network || 'ws'}&host=${host}&path=${settings.path || '/'}&security=tls&sni=${settings.sni || host}#${encodeURIComponent(config.name)}`;
+        uri = `trojan://${settings.password || 'password'}@${host}:${port}?type=${settings.network || 'ws'}&host=${host}&path=${settings.path || '/'}&security=tls&sni=${settings.sni || host}${echParam}${tlsFragParam}#${encodeURIComponent(config.name)}`;
         break;
       case 'ss-ws':
       case 'ss-wss':
@@ -116,7 +155,6 @@ export async function handleSubscription(
         uri = `ss://${ssInfo}@${host}:${port}?type=${settings.network || 'ws'}&path=${settings.path || '/'}#${encodeURIComponent(config.name)}`;
         break;
       default:
-        // Custom protocol — use generic format
         uri = `${config.proto_id}://${btoa(processedTemplate)}@${host}:${port}#${encodeURIComponent(config.name)}`;
     }
 
@@ -125,11 +163,11 @@ export async function handleSubscription(
 
   // Format output
   if (format === 'clash' || accept.includes('text/yaml')) {
-    return generateClashConfig(links, configs.results, user);
+    return generateClashConfig(links, configs.results, user, echEnabled, echSni);
   }
 
   if (format === 'singbox' || accept.includes('application/json')) {
-    return generateSingboxConfig(links, configs.results, user);
+    return generateSingboxConfig(links, configs.results, user, echEnabled, echSni);
   }
 
   // Default: base64 encoded
@@ -140,7 +178,9 @@ export async function handleSubscription(
 function generateClashConfig(
   links: string[],
   configs: any[],
-  user: any
+  user: any,
+  echEnabled = false,
+  echSni = 'cloudflare-ech.com'
 ): Response {
   const proxies: any[] = [];
   const proxyNames: string[] = [];
@@ -163,6 +203,20 @@ function generateClashConfig(
       proxy.flow = settings.flow || '';
       proxy.tls = settings.security === 'tls' || settings.security === 'reality';
       if (settings.sni) proxy.sni = settings.sni;
+
+      // gRPC support
+      if (config.proto_id === 'vless-grpc') {
+        proxy.network = 'grpc';
+        proxy['grpc-opts'] = { 'grpc-service-name': settings.serviceName || 'grpc' };
+      }
+
+      // ECH support for Clash
+      if (echEnabled) {
+        proxy['ech-opts'] = {
+          enable: true,
+          'query-server-name': echSni,
+        };
+      }
     }
 
     if (config.proto_id.includes('vmess')) {
@@ -214,7 +268,9 @@ function generateClashConfig(
 function generateSingboxConfig(
   links: string[],
   configs: any[],
-  user: any
+  user: any,
+  echEnabled = false,
+  echSni = 'cloudflare-ech.com'
 ): Response {
   const outbounds: any[] = [];
 
@@ -235,6 +291,20 @@ function generateSingboxConfig(
       outbound.flow = settings.flow || '';
       if (settings.security === 'tls') {
         outbound.tls = { enabled: true, server_name: settings.sni || settings.host };
+        // ECH support for sing-box
+        if (echEnabled) {
+          (outbound.tls as any).ech = {
+            enabled: true,
+            query_server_name: echSni,
+          };
+        }
+      }
+      // gRPC transport for sing-box
+      if (config.proto_id === 'vless-grpc') {
+        outbound.transport = {
+          type: 'grpc',
+          serviceName: settings.serviceName || 'grpc',
+        };
       }
     }
 

@@ -4,6 +4,22 @@ export interface Env {
   ENABLE_TELEGRAM: string;
   ENABLE_TON_WALLET: string;
   EXTERNAL_SERVER_URL: string;
+  DISGUISE_PAGE?: string;
+  PANEL_RECOVERY?: string;
+  ADMIN_PATH?: string;
+  LOGIN_PATH?: string;
+  SUB_PATH?: string;
+  TG_BOT_TOKEN?: string;
+}
+
+export interface DisguiseConfig {
+  on: boolean;
+  adminPath: string;
+  loginPath: string;
+  subPath: string;
+  pubAdmin: string;
+  pubLogin: string;
+  fallbackPage: string;
 }
 
 export interface User {

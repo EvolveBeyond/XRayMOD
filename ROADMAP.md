@@ -21,20 +21,21 @@
 - [x] Setup script for Git repository fixes
 
 ## Phase 3: Advanced Proxy Features
-- [ ] ECH (Encrypted Client Hello) support
-- [ ] TLS fragment / SNI fragment
+- [x] ECH (Encrypted Client Hello) support
+- [x] TLS fragment / SNI fragment
 - [ ] Proxy chaining (SOCKS5, HTTP, HTTPS forward)
-- [ ] gRPC transport support
+- [x] gRPC transport support
 - [ ] XHTTP transport support
 - [ ] WebSocket Early Data (0-RTT)
 - [ ] Multi-path / port-spread configuration
-- [ ] Automatic clean IP scanning
+- [x] Disguise system — Error 1101 bypass + secret admin/login paths
+- [x] Automatic clean IP scanning + Iranian ISP detection
 
 ## Phase 4: External Server Bridge
-- [ ] Telegram Bot integration (user notifications, management commands)
+- [x] Telegram Bot integration (user notifications, management commands)
+- [x] Backend mode — VPS registration + auto-install script
 - [ ] TON Wallet integration (payments, withdrawals)
-- [ ] Separate Node.js server for Telegram/TON features
-- [ ] Bridge API between Worker and external server
+- [x] Bridge API between Worker and external server
 - [ ] Real-time notifications via WebSocket
 
 ## Phase 5: WARP Integration
