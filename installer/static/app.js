@@ -218,13 +218,32 @@ function renderProgress(steps, done) {
   }).join('');
 }
 
-// ── Init: check for existing deployment ─────────────────────
+// ── Init: check for saved token + existing deployment ────────
 (async () => {
   try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    if (data.installed) {
+    const [statusRes, tokenRes] = await Promise.all([
+      fetch('/api/status'),
+      fetch('/api/check-token'),
+    ]);
+    const status = await statusRes.json();
+    const token = await tokenRes.json();
+
+    if (status.installed) {
       document.getElementById('existing-deploy').style.display = 'block';
+    }
+
+    if (token.valid) {
+      accessToken = token.access_token;
+      // Auto-connect all sections
+      document.getElementById('oauth-section').innerHTML =
+        '<div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected to <strong>' + token.account.name + '</strong></div>';
+      document.getElementById('deployBtn').disabled = false;
+      document.getElementById('update-oauth-section').innerHTML =
+        '<div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected</div>';
+      document.getElementById('updateBtn').disabled = false;
+      document.getElementById('delete-oauth-section').innerHTML =
+        '<div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected</div>';
+      document.getElementById('deleteBtn').disabled = false;
     }
   } catch (e) {}
 })();

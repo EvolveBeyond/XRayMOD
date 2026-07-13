@@ -64,9 +64,26 @@ async def oauth_wait(request: Request):
         return JSONResponse({"error": result.get("error", "Failed") if result else "Timeout"}, 400)
     try:
         account = verify_token(result["access_token"])
+        # Save token for reuse
+        config = load()
+        save({**config, "access_token": result["access_token"], "account_name": account["name"]})
         return {"success": True, "access_token": result["access_token"], "account": account}
     except CFApiError as e:
         return JSONResponse({"error": str(e)}, 400)
+
+
+@app.get("/api/check-token")
+async def check_token():
+    """Check if saved token is still valid."""
+    config = load()
+    token = config.get("access_token", "")
+    if not token:
+        return {"valid": False}
+    try:
+        account = verify_token(token)
+        return {"valid": True, "access_token": token, "account": account}
+    except CFApiError:
+        return {"valid": False}
 
 
 @app.post("/api/deploy")
