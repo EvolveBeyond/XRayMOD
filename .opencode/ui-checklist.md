@@ -104,10 +104,12 @@
 - [ ] Export button
 
 ### Settings
-- [ ] System info (version, uptime, memory)
-- [ ] Update check
-- [ ] Backup/restore config
-- [ ] Reset to defaults
+- [x] System info (version, uptime, storage, configured)
+- [x] Change password (with show/hide toggle)
+- [x] 2FA setup (secret, code, enable/disable)
+- [x] Backup/restore config (export/import JSON)
+- [x] Reset to defaults (double confirmation)
+- [x] Self-update check
 
 ---
 
