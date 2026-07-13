@@ -9,17 +9,18 @@ import httpx
 from . import cf_api
 from .config import load, save, get_cache_path
 
-PANEL_GITHUB = "https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/refs/heads/main"
+# Nova-Proxy worker.js as base (proven, no 1101)
+NOVA_WORKER_URL = "https://raw.githubusercontent.com/IRNova/Nova-Proxy/main/worker.js"
 
 
 def fetch_worker_code() -> str:
-    cached = get_cache_path("worker.js")
+    cached = get_cache_path("nova-worker.js")
     if cached.exists():
         return cached.read_text()
 
-    resp = httpx.get(f"{PANEL_GITHUB}/worker.js", timeout=30, follow_redirects=True)
+    resp = httpx.get(NOVA_WORKER_URL, timeout=30, follow_redirects=True)
     if resp.status_code != 200:
-        raise RuntimeError(f"Failed to download worker code: HTTP {resp.status_code}")
+        raise RuntimeError(f"Failed to download Nova worker: HTTP {resp.status_code}")
 
     cached.parent.mkdir(parents=True, exist_ok=True)
     cached.write_text(resp.text)

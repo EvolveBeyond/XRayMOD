@@ -229,46 +229,38 @@ def get_worker_settings(cf: CFClient, account_id: str, worker_name: str) -> dict
 
 
 def deploy_worker(cf: CFClient, account_id: str, worker_name: str, worker_code: str,
-                  d1_id: str, admin_password: str) -> str:
+                  d1_id: str) -> str:
+    """Deploy Nova worker.js with D1 binding only. Password set via /install page."""
     logger.info(f"Deploying worker: {worker_name}")
 
-    # Check if worker already exists — if so, preserve its bindings
+    # Check if worker already exists — preserve bindings
     existing = get_worker_settings(cf, account_id, worker_name)
     if existing and existing.get("result"):
-            settings = existing["result"]
-            metadata = {}
-            for field in ["main_module", "compatibility_date", "compatibility_flags",
-                          "bindings", "migrations", "usage_model", "limits", "placement"]:
-                if settings.get(field) is not None:
-                    metadata[field] = settings[field]
-            if not metadata.get("main_module"):
-                metadata["main_module"] = "worker.js"
-            if not metadata.get("compatibility_date"):
-                metadata["compatibility_date"] = "2025-01-01"
-            if not metadata.get("compatibility_flags"):
-                metadata["compatibility_flags"] = ["nodejs_compat"]
-            # Add/update ADMIN_PASSWORD binding
-            bindings = metadata.get("bindings", [])
-            admin_found = False
-            for b in bindings:
-                if b.get("name") == "ADMIN_PASSWORD":
-                    b["text"] = admin_password
-                    admin_found = True
-            if not admin_found:
-                bindings.append({"type": "plain_text", "name": "ADMIN_PASSWORD", "text": admin_password})
-            # Ensure DB binding exists
-            db_found = any(b.get("name") == "DB" for b in bindings)
-            if not db_found and d1_id:
-                bindings.append({"type": "d1", "name": "DB", "database_id": d1_id})
-            metadata["bindings"] = bindings
-            logger.info(f"Updating existing worker, preserving {len(bindings)} bindings")
+        settings = existing["result"]
+        metadata = {}
+        for field in ["main_module", "compatibility_date", "compatibility_flags",
+                      "bindings", "migrations", "usage_model", "limits", "placement"]:
+            if settings.get(field) is not None:
+                metadata[field] = settings[field]
+        if not metadata.get("main_module"):
+            metadata["main_module"] = "worker.js"
+        if not metadata.get("compatibility_date"):
+            metadata["compatibility_date"] = "2024-09-23"
+        if not metadata.get("compatibility_flags"):
+            metadata["compatibility_flags"] = ["nodejs_compat"]
+        bindings = metadata.get("bindings", [])
+        db_found = any(b.get("name") == "DB" for b in bindings)
+        if not db_found and d1_id:
+            bindings.append({"type": "d1", "name": "DB", "database_id": d1_id})
+        metadata["bindings"] = bindings
+        logger.info(f"Updating existing worker, preserving {len(bindings)} bindings")
     else:
         metadata = {
-            "main_module": "worker.js", "compatibility_date": "2025-01-01",
+            "main_module": "worker.js",
+            "compatibility_date": "2024-09-23",
             "compatibility_flags": ["nodejs_compat"],
             "bindings": [
                 {"type": "d1", "name": "DB", "database_id": d1_id},
-                {"type": "plain_text", "name": "ADMIN_PASSWORD", "text": admin_password},
             ],
         }
 

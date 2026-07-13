@@ -92,12 +92,9 @@ async def deploy_endpoint(request: Request):
     access_token = body.get("access_token", "").strip()
     worker_name = body.get("worker_name", "") or f"cf-{secrets.token_hex(6)}"
     d1_name = body.get("d1_name", "") or f"{worker_name}-db"
-    admin_password = body.get("admin_password", "").strip()
 
     if not access_token:
         return JSONResponse({"error": "Access token required"}, 400)
-    if not admin_password or len(admin_password) < 4:
-        return JSONResponse({"error": "Password must be at least 4 characters"}, 400)
 
     try:
         cf = CFClient(access_token)
@@ -115,7 +112,7 @@ async def deploy_endpoint(request: Request):
 
         d1 = create_d1(cf, account_id, d1_name)
         worker_code = fetch_worker_code()
-        deploy_worker(cf, account_id, worker_name, worker_code, d1["id"], admin_password)
+        deploy_worker(cf, account_id, worker_name, worker_code, d1["id"])
         enable_subdomain(cf, account_id, worker_name)
         worker_url = get_worker_url(cf, account_id, worker_name)
 
@@ -140,7 +137,6 @@ async def deploy_endpoint(request: Request):
 async def update_endpoint(request: Request):
     body = await request.json()
     access_token = body.get("access_token", "").strip() or load().get("access_token", "")
-    admin_password = body.get("admin_password", "").strip()
 
     if not access_token:
         return JSONResponse({"error": "Access token required"}, 400)
@@ -152,15 +148,12 @@ async def update_endpoint(request: Request):
     if not worker_name or not d1_id:
         return JSONResponse({"error": "No existing deployment found. Deploy first."}, 400)
 
-    if not admin_password or len(admin_password) < 4:
-        return JSONResponse({"error": "Password must be at least 4 characters"}, 400)
-
     try:
         cf = CFClient(access_token)
         account_id = config.get("account_id", "")
 
         worker_code = fetch_worker_code()
-        deploy_worker(cf, account_id, worker_name, worker_code, d1_id, admin_password)
+        deploy_worker(cf, account_id, worker_name, worker_code, d1_id)
         enable_subdomain(cf, account_id, worker_name)
         worker_url = get_worker_url(cf, account_id, worker_name)
 

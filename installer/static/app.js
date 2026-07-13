@@ -1,4 +1,4 @@
-// XRayMOD Installer — Full flow: deploy, update, delete
+// XRayMOD Installer — Nova Worker Base
 let accessToken = null;
 let currentMode = null;
 
@@ -12,7 +12,6 @@ function selectMode(mode) {
   if (mode === 'cloudflare') show('step-cf');
   else if (mode === 'update') show('step-update');
   else if (mode === 'delete') show('step-delete');
-  else show('step-server');
 }
 
 function goBack() { show('step-welcome'); }
@@ -81,37 +80,32 @@ async function connectCloudflare(forMode) {
 
 // ── Deploy ──────────────────────────────────────────────────
 async function deploy() {
-  const password = document.getElementById('adminPassword').value.trim();
-  if (!accessToken || !password || password.length < 4) {
-    setStatus('token-status', 'Password must be at least 4 characters', false);
-    return;
-  }
+  if (!accessToken) return;
   document.getElementById('deployBtn').disabled = true;
   show('step-progress');
-  renderProgress(['Verify account', 'Create D1', 'Download code', 'Deploy worker', 'Enable subdomain'], 0);
+  renderProgress(['Verify account', 'Create D1', 'Download Nova worker', 'Deploy worker', 'Enable subdomain'], 0);
 
   try {
     const res = await fetch('/api/deploy', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        access_token: accessToken, admin_password: password,
+        access_token: accessToken,
         worker_name: document.getElementById('workerName').value.trim() || undefined,
       }),
     });
     const data = await res.json();
     if (data.success) {
-      renderProgress(['Verify account', 'Create D1', 'Download code', 'Deploy worker', 'Enable subdomain'], 5);
+      renderProgress(['Verify account', 'Create D1', 'Download Nova worker', 'Deploy worker', 'Enable subdomain'], 5);
       setTimeout(() => {
-        showResult('Deployment Complete!', 'Your panel is ready.', `
+        const installUrl = data.worker_url + '/install';
+        showResult('Deployment Complete!', 'Open the link below to set your panel password.', `
           <div class="result-card highlight">
-            <div class="result-label-big">Your Panel URL</div>
-            <div class="result-row"><code class="result-value url">${data.worker_url}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${data.worker_url}')">Copy</button></div>
-            <p class="help">Visit this URL, then go to /install to set your password.</p>
+            <div class="result-label-big">Step 1: Open this URL to set your password</div>
+            <div class="result-row"><code class="result-value url">${installUrl}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${installUrl}')">Copy</button></div>
           </div>
           <div class="result-card">
-            <div class="result-row"><span class="result-label">User</span><code class="result-value">admin</code></div>
-            <div class="result-row"><span class="result-label">Password</span><code class="result-value">${data.admin_password}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${data.admin_password}')">Copy</button></div>
-            <div class="result-row"><span class="result-label">Database</span><code class="result-value">${data.d1_database}</code></div>
+            <div class="result-label-big">Step 2: After setting password, use this URL</div>
+            <div class="result-row"><code class="result-value url">${data.worker_url}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${data.worker_url}')">Copy</button></div>
           </div>
         `);
       }, 500);
@@ -129,25 +123,21 @@ async function deploy() {
 
 // ── Update ──────────────────────────────────────────────────
 async function updatePanel() {
-  const password = document.getElementById('updatePassword').value.trim();
-  if (!accessToken || !password || password.length < 4) {
-    setStatus('update-status', 'Password required', false);
-    return;
-  }
+  if (!accessToken) return;
   document.getElementById('updateBtn').disabled = true;
   show('step-progress');
-  renderProgress(['Download code', 'Deploy worker', 'Enable subdomain'], 0);
+  renderProgress(['Download Nova worker', 'Deploy worker', 'Enable subdomain'], 0);
 
   try {
     const res = await fetch('/api/update', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_token: accessToken, admin_password: password }),
+      body: JSON.stringify({ access_token: accessToken }),
     });
     const data = await res.json();
     if (data.success) {
-      renderProgress(['Download code', 'Deploy worker', 'Enable subdomain'], 3);
+      renderProgress(['Download Nova worker', 'Deploy worker', 'Enable subdomain'], 3);
       setTimeout(() => {
-        showResult('Update Complete!', 'Panel updated with latest code.', `
+        showResult('Update Complete!', 'Panel updated with latest Nova worker.', `
           <div class="result-card highlight">
             <div class="result-label-big">Your Panel URL</div>
             <div class="result-row"><code class="result-value url">${data.worker_url}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${data.worker_url}')">Copy</button></div>
@@ -218,7 +208,7 @@ function renderProgress(steps, done) {
   }).join('');
 }
 
-// ── Init: check for saved token + existing deployment ────────
+// ── Init ────────────────────────────────────────────────────
 (async () => {
   try {
     const [statusRes, tokenRes] = await Promise.all([
@@ -234,7 +224,6 @@ function renderProgress(steps, done) {
 
     if (token.valid) {
       accessToken = token.access_token;
-      // Auto-connect all sections
       document.getElementById('oauth-section').innerHTML =
         '<div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected to <strong>' + token.account.name + '</strong></div>';
       document.getElementById('deployBtn').disabled = false;
