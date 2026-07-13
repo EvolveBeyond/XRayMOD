@@ -45,13 +45,19 @@
 - [x] Per-user speed limit (KB/s)
 
 ### Network
-- [ ] Routing rules toggle
-- [ ] GeoIP/GeoSite settings
-- [ ] Ad/malware/phishing block toggles
-- [ ] Domestic bypass toggle
-- [ ] DNS settings (DoH provider, local DNS)
-- [ ] IPv6 toggle
-- [ ] Custom routing rules editor
+- [x] Routing rules (GeoIP, GeoSite, Ad/Porn block)
+- [x] Domestic bypass toggle
+- [x] DNS over HTTPS (4 providers)
+- [x] Local DNS (custom resolver)
+- [x] FakeDNS (Android VPN)
+- [x] Anti-Sanction DNS (Iran-specific)
+- [x] IPv6 toggle
+- [x] LAN access toggle
+- [x] WARP/WireGuard (mode, endpoint, AmneziaWG, WoW)
+- [x] Log level selector
+- [x] TCP concurrent connections
+- [x] Pre-resolve DNS toggle
+- [x] Custom routing rules editor
 
 ### Clean IP
 - [ ] Radar scanner SPA
