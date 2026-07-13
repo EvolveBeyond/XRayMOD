@@ -230,7 +230,7 @@ def get_worker_settings(cf: CFClient, account_id: str, worker_name: str) -> dict
 
 def deploy_worker(cf: CFClient, account_id: str, worker_name: str, worker_code: str,
                   d1_id: str) -> str:
-    """Deploy Nova worker.js with D1 binding only. Password set via /install page."""
+    """Deploy XRayMOD worker.js with D1 binding only. Password set via /install page."""
     logger.info(f"Deploying worker: {worker_name}")
 
     # Check if worker already exists — preserve bindings

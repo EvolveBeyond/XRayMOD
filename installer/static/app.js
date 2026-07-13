@@ -1,4 +1,4 @@
-// XRayMOD Installer — Nova Worker Base
+// XRayMOD Installer — XRayMOD Worker Base
 let accessToken = null;
 let currentMode = null;
 
@@ -83,7 +83,7 @@ async function deploy() {
   if (!accessToken) return;
   document.getElementById('deployBtn').disabled = true;
   show('step-progress');
-  renderProgress(['Verify account', 'Create D1', 'Download Nova worker', 'Deploy worker', 'Enable subdomain'], 0);
+  renderProgress(['Verify account', 'Create D1', 'Download XRayMOD worker', 'Deploy worker', 'Enable subdomain'], 0);
 
   try {
     const res = await fetch('/api/deploy', {
@@ -95,7 +95,7 @@ async function deploy() {
     });
     const data = await res.json();
     if (data.success) {
-      renderProgress(['Verify account', 'Create D1', 'Download Nova worker', 'Deploy worker', 'Enable subdomain'], 5);
+      renderProgress(['Verify account', 'Create D1', 'Download XRayMOD worker', 'Deploy worker', 'Enable subdomain'], 5);
       setTimeout(() => {
         const installUrl = data.worker_url + '/install';
         showResult('Deployment Complete!', 'Follow the steps below to set up your panel.', `
@@ -133,7 +133,7 @@ async function updatePanel() {
   if (!accessToken) return;
   document.getElementById('updateBtn').disabled = true;
   show('step-progress');
-  renderProgress(['Download Nova worker', 'Deploy worker', 'Enable subdomain'], 0);
+  renderProgress(['Download XRayMOD worker', 'Deploy worker', 'Enable subdomain'], 0);
 
   try {
     const res = await fetch('/api/update', {
@@ -142,9 +142,9 @@ async function updatePanel() {
     });
     const data = await res.json();
     if (data.success) {
-      renderProgress(['Download Nova worker', 'Deploy worker', 'Enable subdomain'], 3);
+      renderProgress(['Download XRayMOD worker', 'Deploy worker', 'Enable subdomain'], 3);
       setTimeout(() => {
-        showResult('Update Complete!', 'Panel updated with latest Nova worker.', `
+        showResult('Update Complete!', 'Panel updated with latest XRayMOD worker.', `
           <div class="result-card highlight">
             <div class="result-label-big">Your Panel URL</div>
             <div class="result-row"><code class="result-value url">${data.worker_url}</code><button class="copy-btn" onclick="navigator.clipboard.writeText('${data.worker_url}')">Copy</button></div>
