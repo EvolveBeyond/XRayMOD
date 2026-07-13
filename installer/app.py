@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+import subprocess
 import webbrowser
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from .cf_api import (
     CFClient, CFApiError, get_oauth_url, start_oauth_server, wait_for_oauth,
     create_d1, deploy_worker, get_worker_url, enable_subdomain, verify_token,
-    get_worker_account, delete_worker, delete_d1,
+    get_worker_account, delete_worker, delete_d1, deploy_frontend,
 )
 from .config import load, save
 from .deployer import fetch_worker_code, generate_password
@@ -24,6 +25,7 @@ logger = logging.getLogger("xraymod.installer")
 app = FastAPI(title="XRayMOD Installer")
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 start_oauth_server()
 
@@ -110,15 +112,27 @@ async def deploy_endpoint(request: Request):
             except CFApiError:
                 pass
 
+        # Deploy worker
         d1 = create_d1(cf, account_id, d1_name)
         worker_code = fetch_worker_code()
         deploy_worker(cf, account_id, worker_name, worker_code, d1["id"])
         enable_subdomain(cf, account_id, worker_name)
         worker_url = get_worker_url(cf, account_id, worker_name)
 
+        # Build and deploy frontend to Pages
+        pages_name = f"{worker_name}-panel"
+        try:
+            logger.info(f"Building frontend...")
+            subprocess.run(["npm", "run", "build"], cwd=str(FRONTEND_DIR), check=True, capture_output=True, timeout=120)
+            logger.info(f"Deploying frontend to Pages: {pages_name}")
+            deploy_frontend(cf, account_id, pages_name, FRONTEND_DIR / ".next" / "static")
+        except Exception as e:
+            logger.warning(f"Frontend deploy failed (non-critical): {e}")
+
         save({
             "access_token": access_token, "worker_name": worker_name,
             "d1_name": d1_name, "d1_id": d1["id"], "worker_url": worker_url,
+            "pages_name": pages_name,
             "account_id": account_id, "account_name": account_name, "mode": "cloudflare",
         })
 

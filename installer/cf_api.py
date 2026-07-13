@@ -317,3 +317,32 @@ def delete_d1(cf: CFClient, account_id: str, d1_id: str):
     logger.info(f"Deleting D1: {d1_id}")
     cf.req("DELETE", f"/accounts/{account_id}/d1/database/{d1_id}", accept_404=True)
     logger.info(f"D1 deleted: {d1_id}")
+
+
+def deploy_frontend(cf: CFClient, account_id: str, project_name: str, static_dir: Path):
+    """Deploy frontend to Cloudflare Pages."""
+    import tarfile
+    import tempfile
+
+    # Create tarball of .next/static
+    with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+        with tarfile.open(tmp.name, 'w:gz') as tar:
+            for f in static_dir.rglob('*'):
+                if f.is_file():
+                    tar.add(f, arcname=f.relative_to(static_dir.parent.parent))
+        tar_path = tmp.name
+
+    try:
+        # Upload to Pages
+        with open(tar_path, 'rb') as f:
+            cf.req("POST", f"/accounts/{account_id}/pages/projects/{project_name}/deployments",
+                   data=f.read(), content_type="application/gzip")
+        logger.info(f"Frontend deployed to Pages: {project_name}")
+    except CFApiError:
+        # Project might not exist, create it
+        cf.req("POST", f"/accounts/{account_id}/pages/projects",
+               json_body={"name": project_name, "production_branch": "main"})
+        with open(tar_path, 'rb') as f:
+            cf.req("POST", f"/accounts/{account_id}/pages/projects/{project_name}/deployments",
+                   data=f.read(), content_type="application/gzip")
+        logger.info(f"Frontend Pages project created and deployed: {project_name}")
