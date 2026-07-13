@@ -1,82 +1,164 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Server, Globe, TrendingUp } from 'lucide-react';
+import { Users, Server, Globe, Activity, Clock, Wifi } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { User, Node } from '@/lib/types';
+import { StatCard, Card, CardHeader, ProgressBar, StatusBadge } from '@/components';
 
-function StatCard({ title, value, sub, icon: Icon, color }: { title: string; value: string; sub: string; icon: React.ElementType; color: string }) {
-  return (
-    <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 w-1 h-full ${color}`} />
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-zinc-400">{title}</span>
-        <Icon className={`w-4 h-4 ${color.replace('bg-', 'text-')}`} />
-      </div>
-      <div className="text-2xl font-bold">{value}</div>
-      <p className="text-xs text-zinc-500 mt-1">{sub}</p>
-    </div>
-  );
+interface SystemStatus {
+  uptime: string;
+  version: string;
+  configured: boolean;
+  kv: boolean;
+  d1: boolean;
+}
+
+interface UsageData {
+  today: { up: number; down: number; total: number };
+  month: { up: number; down: number; total: number };
 }
 
 export default function DashboardPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [nodes, setNodes] = useState<Node[]>([]);
+  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [usage, setUsage] = useState<UsageData | null>(null);
+  const [users, setUsers] = useState<{ total: number; active: number }>({ total: 0, active: 0 });
 
   useEffect(() => {
-    api.get('/api/users').then(d => setUsers(d.data || [])).catch(() => {});
-    api.get('/api/nodes').then(d => setNodes(d.data || [])).catch(() => {});
+    api.get('/install/status').then(d => setStatus(d)).catch(() => {});
+    api.get('/admin/usage-data').then(d => setUsage(d)).catch(() => {});
+    api.get('/admin/users.json').then(d => {
+      const u = Array.isArray(d) ? d : [];
+      setUsers({ total: u.length, active: u.filter((x: any) => x.enabled !== false).length });
+    }).catch(() => {});
   }, []);
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-4xl font-black tracking-tight">Overview</h1>
-        <p className="text-zinc-500 mt-1">System health and performance at a glance.</p>
+        <h1 className="text-4xl font-black tracking-tight">Dashboard</h1>
+        <p className="text-zinc-500 mt-1">System overview and quick actions.</p>
       </div>
 
+      {/* Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Users" value={String(users.length)} sub="Active accounts" icon={Users} color="bg-emerald-500" />
-        <StatCard title="Active Nodes" value={String(nodes.filter(n => n.status === 'online').length)} sub={`${nodes.length} total`} icon={Server} color="bg-blue-500" />
-        <StatCard title="Total Traffic" value="4.2 TB" sub="Across all nodes" icon={Globe} color="bg-amber-500" />
-        <StatCard title="Monthly Revenue" value="$1,240" sub="+8.4% growth" icon={TrendingUp} color="bg-emerald-500" />
+        <StatCard
+          title="Users"
+          value={String(users.total)}
+          subtitle={`${users.active} active`}
+          icon={Users}
+          color="emerald"
+        />
+        <StatCard
+          title="Status"
+          value={status?.configured ? 'Active' : 'Setup'}
+          subtitle={status?.version || 'XRayMOD'}
+          icon={Wifi}
+          color={status?.configured ? 'emerald' : 'amber'}
+        />
+        <StatCard
+          title="Today Traffic"
+          value={formatBytes(usage?.today?.total || 0)}
+          subtitle={`↑ ${formatBytes(usage?.today?.up || 0)} / ↓ ${formatBytes(usage?.today?.down || 0)}`}
+          icon={Activity}
+          color="blue"
+        />
+        <StatCard
+          title="Monthly Traffic"
+          value={formatBytes(usage?.month?.total || 0)}
+          subtitle="Current billing period"
+          icon={Globe}
+          color="violet"
+        />
       </div>
 
-      {/* Node Performance */}
-      <div className="bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
-        <h2 className="text-lg font-bold mb-4">Node Performance</h2>
-        <div className="space-y-4">
-          {nodes.slice(0, 3).map(node => (
-            <div key={node.id} className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${node.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'}`} />
-                  <span className="font-bold text-sm">{node.name}</span>
-                </div>
-                <span className="text-xs font-mono text-zinc-500">{node.ip}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="flex justify-between text-[10px] uppercase text-zinc-500 mb-1">
-                    <span>CPU</span><span>{node.cpu}%</span>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${node.cpu}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-[10px] uppercase text-zinc-500 mb-1">
-                    <span>RAM</span><span>{node.ram}%</span>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${node.ram}%` }} />
-                  </div>
-                </div>
+      {/* System Info */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader title="System Info" />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2 border-b border-zinc-800/50">
+              <span className="text-sm text-zinc-400">Version</span>
+              <span className="text-sm font-mono">{status?.version || 'N/A'}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-zinc-800/50">
+              <span className="text-sm text-zinc-400">Uptime</span>
+              <span className="text-sm font-mono">{status?.uptime || 'N/A'}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-zinc-800/50">
+              <span className="text-sm text-zinc-400">Storage</span>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={status?.d1 ? 'D1' : 'KV'} variant={status?.d1 ? 'success' : 'info'} />
               </div>
             </div>
-          ))}
-        </div>
+            <div className="flex items-center justify-between py-2">
+              <span className="text-sm text-zinc-400">Config</span>
+              <StatusBadge status={status?.configured ? 'Configured' : 'Not Setup'} />
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Traffic Breakdown" />
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                <span>Upload</span>
+                <span className="font-mono">{formatBytes(usage?.month?.up || 0)}</span>
+              </div>
+              <ProgressBar
+                value={usage?.month?.up || 0}
+                max={(usage?.month?.total || 1)}
+                color="emerald"
+                size="sm"
+              />
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                <span>Download</span>
+                <span className="font-mono">{formatBytes(usage?.month?.down || 0)}</span>
+              </div>
+              <ProgressBar
+                value={usage?.month?.down || 0}
+                max={(usage?.month?.total || 1)}
+                color="blue"
+                size="sm"
+              />
+            </div>
+          </div>
+        </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader title="Quick Actions" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <a href="/panel/users" className="flex flex-col items-center gap-2 p-4 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors">
+            <Users className="w-5 h-5 text-emerald-500" />
+            <span className="text-xs font-medium">Manage Users</span>
+          </a>
+          <a href="/panel/cleanip" className="flex flex-col items-center gap-2 p-4 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors">
+            <Globe className="w-5 h-5 text-blue-500" />
+            <span className="text-xs font-medium">Clean IPs</span>
+          </a>
+          <a href="/panel/protocols" className="flex flex-col items-center gap-2 p-4 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors">
+            <Activity className="w-5 h-5 text-violet-500" />
+            <span className="text-xs font-medium">Protocols</span>
+          </a>
+          <a href="/panel/settings" className="flex flex-col items-center gap-2 p-4 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors">
+            <Clock className="w-5 h-5 text-amber-500" />
+            <span className="text-xs font-medium">Settings</span>
+          </a>
+        </div>
+      </Card>
     </div>
   );
 }
