@@ -33,12 +33,16 @@
 - [ ] Host health indicators
 
 ### Users
-- [ ] User list with search/filter
-- [ ] Add/edit/delete user dialog
-- [ ] Per-user quota (traffic limit)
+- [x] User list with search/filter
+- [x] Add user form (username, email, traffic, expiry)
+- [x] Delete user with confirmation
+- [x] Per-user quota (traffic limit + progress bar)
+- [x] User status (active/disabled badges)
+- [x] Reset user quota
+- [x] Enable/disable toggle
+- [x] Copy subscription link
+- [ ] Edit user dialog
 - [ ] Per-user speed limit
-- [ ] User status (active/expired/disabled)
-- [ ] Reset user quota
 
 ### Network
 - [ ] Routing rules toggle
