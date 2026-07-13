@@ -1,12 +1,14 @@
 /**
- * IOP Router — routes requests by intent, not by URL patterns.
+ * IOP Router — routes requests by intent, with full security pipeline.
  *
- * Pipeline: detect intent → process by intent type → return response
- * Each processor is independent — add new intents without touching this file.
+ * Pipeline: UUID check → Intent detection → Disguise fallback → Process
  */
 import type { Env } from './types';
 import { ensureSchema } from './schema';
 import { detectIntent, processIntent } from './intent';
+import { getDisguiseConfig, getDecoyResponse } from './disguise';
+import { isGrpcRequest } from './proxy/grpc';
+import { isXHTTPRequest } from './proxy/xhttp';
 
 // Register all processors (side effect — adds to registry)
 import './processors';
@@ -30,7 +32,7 @@ export async function handleRequest(
   ctx: ExecutionContext
 ): Promise<Response> {
   try {
-    // CORS preflight — fast exit, no intent detection needed
+    // CORS preflight — fast exit
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -47,13 +49,106 @@ export async function handleRequest(
     await ensureSchema(env.DB);
 
     const url = new URL(request.url);
+    let pathname = url.pathname;
 
-    // ── IOP Pipeline ────────────────────────────────────────
-    // 1. Detect intent from request
+    // ══════════════════════════════════════════════════════════
+    // STEP 1: Bypass routes (no UUID check needed)
+    // ══════════════════════════════════════════════════════════
+    const bypassUUID = pathname.startsWith('/install') ||
+                       pathname.startsWith('/api/') ||
+                       pathname.startsWith('/sub/') ||
+                       pathname.startsWith('/bot') ||
+                       request.headers.get('Upgrade') === 'websocket';
+
+    // ══════════════════════════════════════════════════════════
+    // STEP 2: Proxy traffic (WebSocket/gRPC/XHTTP) — bypass disguise
+    // ══════════════════════════════════════════════════════════
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const intent = detectIntent(request, url, env);
+      return processIntent(intent, request, env, ctx);
+    }
+
+    // gRPC/XHTTP POST — proxy traffic
+    if (request.method === 'POST' && !pathname.startsWith('/api/') && !pathname.startsWith('/install')) {
+      if (isGrpcRequest(request) || isXHTTPRequest(request)) {
+        const intent = detectIntent(request, url, env);
+        return processIntent(intent, request, env, ctx);
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // STEP 3: UUID-based panel access
+    // ══════════════════════════════════════════════════════════
+    const panelUUID = await env.DB.prepare(
+      'SELECT v FROM kvstore WHERE k = ?'
+    ).bind('panel.access_uuid').first<{ v: string }>();
+
+    const accessUuid = panelUUID?.v;
+
+    if (accessUuid && !bypassUUID) {
+      const segments = pathname.split('/').filter(Boolean);
+
+      // No UUID in path → check disguise
+      if (segments.length === 0 || segments[0] !== accessUuid) {
+        // Check if not configured yet → redirect to /install
+        const configured = await env.DB.prepare(
+          'SELECT v FROM kvstore WHERE k = ?'
+        ).bind('panel.password_hash').first<{ v: string }>();
+
+        if (!configured || !configured.v) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: '/install' },
+          });
+        }
+
+        // Show disguise page
+        const disguise = await getDisguiseConfig(env, env.DB);
+        return getDecoyResponse(url.host, disguise.fallbackPage);
+      }
+
+      // UUID matches → strip it and continue
+      pathname = '/' + segments.slice(1).join('/');
+      url.pathname = pathname || '/';
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // STEP 4: Not configured → redirect to /install
+    // ══════════════════════════════════════════════════════════
+    if (!bypassUUID && !accessUuid) {
+      try {
+        const configured = await env.DB.prepare(
+          'SELECT v FROM kvstore WHERE k = ?'
+        ).bind('panel.password_hash').first<{ v: string }>();
+
+        if (!configured || !configured.v) {
+          return new Response(null, {
+            status: 302,
+            headers: { Location: '/install' },
+          });
+        }
+      } catch (_e) {
+        // DB might not be ready yet
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // STEP 5: Detect intent and process
+    // ══════════════════════════════════════════════════════════
     const intent = detectIntent(request, url, env);
+    const response = await processIntent(intent, request, env, ctx);
 
-    // 2. Process by intent type
-    return processIntent(intent, request, env, ctx);
+    // ══════════════════════════════════════════════════════════
+    // STEP 6: Disguise fallback for unmatched paths
+    // ══════════════════════════════════════════════════════════
+    if (response.status === 404 && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/sub/')) {
+      const disguise = await getDisguiseConfig(env, env.DB);
+      if (disguise.on) {
+        return getDecoyResponse(url.host, disguise.fallbackPage);
+      }
+    }
+
+    return response;
   } catch (e) {
     return errorPage(e instanceof Error ? e.message : 'Unknown error');
   }

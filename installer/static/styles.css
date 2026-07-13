@@ -15,6 +15,8 @@ h2{font-size:1.25rem;font-weight:700;margin-bottom:.5rem}
 .mode-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1rem;margin:0 auto .75rem}
 .mode-icon.cf{background:#f48120;color:#000}
 .mode-icon.sv{background:#3b82f6;color:#fff}
+.mode-icon.up{background:#10b981;color:#000;font-size:1.5rem}
+.mode-icon.del{background:#ef4444;color:#fff;font-size:1.25rem}
 .mode-name{font-weight:700;font-size:.875rem;margin-bottom:.25rem}
 .mode-desc{font-size:.75rem;color:#71717a}
 .form-group{margin-bottom:1rem}
@@ -28,6 +30,8 @@ input::placeholder{color:#52525b}
 .btn-primary:disabled{background:#27272a;color:#52525b;cursor:not-allowed}
 .btn-oauth{display:flex;align-items:center;justify-content:center;gap:.5rem;background:#f48120;color:#000}
 .btn-oauth:hover{background:#fbad41}
+.btn-danger{background:#ef4444;color:#fff}
+.btn-danger:hover{background:#dc2626}
 .btn-icon{width:24px;height:24px;background:#000;color:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:.7rem}
 .spinner-small{width:16px;height:16px;border:2px solid rgba(0,0,0,.3);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite}
 .check-icon{margin-right:.25rem}

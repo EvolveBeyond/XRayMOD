@@ -13,7 +13,23 @@
       <div id="step-welcome" class="step active">
         <div class="logo">X</div>
         <h1>XrayMOD Installer</h1>
-        <p class="subtitle">Deploy your proxy panel to Cloudflare or personal server</p>
+        <p class="subtitle">Deploy, update, or remove your proxy panel</p>
+        <div id="existing-deploy" style="display:none">
+          <div class="status-msg ok">Existing deployment found</div>
+          <div class="mode-grid">
+            <button class="mode-card" onclick="selectMode('update')">
+              <div class="mode-icon up">&#8635;</div>
+              <div class="mode-name">Update Panel</div>
+              <div class="mode-desc">Redeploy with latest code</div>
+            </button>
+            <button class="mode-card" onclick="selectMode('delete')">
+              <div class="mode-icon del">&#10005;</div>
+              <div class="mode-name">Delete Panel</div>
+              <div class="mode-desc">Remove worker + database</div>
+            </button>
+          </div>
+          <p class="help" style="text-align:center;margin-top:1rem">Or deploy a new panel below</p>
+        </div>
         <div class="mode-grid">
           <button class="mode-card" onclick="selectMode('cloudflare')">
             <div class="mode-icon cf">CF</div>
@@ -28,115 +44,92 @@
         </div>
       </div>
 
-      <!-- Step 2: Cloudflare Config -->
+      <!-- Step 2: Cloudflare Deploy -->
       <div id="step-cf" class="step">
         <button class="back-btn" onclick="goBack()">&larr; Back</button>
         <h2>Cloudflare Setup</h2>
-        <p class="step-desc">Connect your Cloudflare account and set up your panel.</p>
-
-        <!-- OAuth Connect Button -->
+        <p class="step-desc">Connect your account and configure the panel.</p>
         <div id="oauth-section">
           <button class="btn-primary btn-oauth" id="connectBtn" onclick="connectCloudflare()">
-            <span class="btn-icon">CF</span>
-            Connect to Cloudflare
+            <span class="btn-icon">CF</span> Connect to Cloudflare
           </button>
-          <p class="help">You'll be redirected to Cloudflare to authorize. No API token needed.</p>
+          <p class="help">No API token needed — OAuth authorization.</p>
         </div>
-
-        <!-- Connected State -->
         <div id="connected-section" style="display:none">
-          <div class="status-msg ok">
-            <span class="check-icon">&#10003;</span>
-            Connected to <strong id="account-name"></strong>
-          </div>
+          <div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected to <strong id="account-name"></strong></div>
         </div>
-
         <div id="token-status" class="status-msg"></div>
-
-        <!-- Required: Admin Password -->
         <div class="form-group">
           <label>Admin Password *</label>
           <input type="password" id="adminPassword" placeholder="Choose a secure password" required minlength="4">
-          <p class="help">This is your panel login password. Minimum 4 characters.</p>
         </div>
-
-        <!-- Optional: Worker Name -->
         <div class="form-group">
           <label>Worker Name (optional)</label>
           <input type="text" id="workerName" placeholder="Auto-generated if empty">
         </div>
-
         <button class="btn-primary" id="deployBtn" onclick="deploy()" disabled>Deploy to Cloudflare</button>
       </div>
 
-      <!-- Step 3: Server Config (placeholder) -->
-      <div id="step-server" class="step">
+      <!-- Step: Update -->
+      <div id="step-update" class="step">
         <button class="back-btn" onclick="goBack()">&larr; Back</button>
-        <h2>Personal Server Setup</h2>
-        <p class="step-desc">Connect to your VPS via SSH to install the panel.</p>
-
-        <div class="coming-soon">
-          <div class="cs-icon">SV</div>
-          <h3>Coming in Phase 2</h3>
-          <p>VPS deployment will be available after the FastAPI backend is built.</p>
+        <h2>Update Panel</h2>
+        <p class="step-desc">Redeploy with the latest worker code.</p>
+        <div id="update-oauth-section">
+          <button class="btn-primary btn-oauth" id="updateConnectBtn" onclick="connectCloudflare('update')">
+            <span class="btn-icon">CF</span> Connect to Cloudflare
+          </button>
         </div>
+        <div id="update-connected-section" style="display:none">
+          <div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected</div>
+        </div>
+        <div id="update-status" class="status-msg"></div>
+        <div class="form-group">
+          <label>Admin Password *</label>
+          <input type="password" id="updatePassword" placeholder="Enter your password" required minlength="4">
+        </div>
+        <button class="btn-primary" id="updateBtn" onclick="updatePanel()" disabled>Update Panel</button>
       </div>
 
-      <!-- Step 4: Progress -->
+      <!-- Step: Delete -->
+      <div id="step-delete" class="step">
+        <button class="back-btn" onclick="goBack()">&larr; Back</button>
+        <h2>Delete Panel</h2>
+        <p class="step-desc">This will permanently remove the worker and database.</p>
+        <div id="delete-oauth-section">
+          <button class="btn-primary btn-oauth" id="deleteConnectBtn" onclick="connectCloudflare('delete')">
+            <span class="btn-icon">CF</span> Connect to Cloudflare
+          </button>
+        </div>
+        <div id="delete-connected-section" style="display:none">
+          <div class="status-msg ok"><span class="check-icon">&#10003;</span> Connected</div>
+        </div>
+        <div id="delete-status" class="status-msg"></div>
+        <div class="form-group">
+          <label>Type DELETE to confirm</label>
+          <input type="text" id="deleteConfirm" placeholder="DELETE">
+        </div>
+        <button class="btn-primary btn-danger" id="deleteBtn" onclick="deletePanel()" disabled>Delete Permanently</button>
+      </div>
+
+      <!-- Step: Progress -->
       <div id="step-progress" class="step">
         <div class="spinner"></div>
-        <h2 id="progress-title">Deploying...</h2>
-        <p id="progress-msg" class="step-desc">Setting up your panel</p>
+        <h2 id="progress-title">Working...</h2>
+        <p id="progress-msg" class="step-desc">Please wait</p>
         <div id="progress-steps" class="progress-steps"></div>
       </div>
 
-      <!-- Step 5: Result -->
+      <!-- Step: Result -->
       <div id="step-result" class="step">
         <div class="result-icon">&#10003;</div>
-        <h2>Deployment Complete!</h2>
-        <p class="step-desc">Your panel is ready. Follow the steps below.</p>
-
-        <!-- Step 1: Visit Install URL -->
-        <div class="result-card highlight">
-          <div class="result-label-big">Step 1: Visit this URL to complete setup</div>
-          <div class="result-row">
-            <code id="result-install-url" class="result-value url"></code>
-            <button class="copy-btn" onclick="copy('result-install-url')">Copy</button>
-          </div>
-          <p class="help">Open this URL in your browser to set your panel password.</p>
-        </div>
-
-        <!-- Credentials -->
-        <div class="result-card">
-          <div class="result-row">
-            <span class="result-label">Admin User</span>
-            <code class="result-value">admin</code>
-          </div>
-          <div class="result-row">
-            <span class="result-label">Admin Password</span>
-            <code id="result-pass" class="result-value"></code>
-            <button class="copy-btn" onclick="copy('result-pass')">Copy</button>
-          </div>
-          <div class="result-row">
-            <span class="result-label">Database</span>
-            <code id="result-db" class="result-value"></code>
-          </div>
-        </div>
-
-        <!-- Step 2: After setup, use this URL -->
-        <div class="result-card">
-          <div class="result-label-big">Step 2: After setup, use this URL</div>
-          <div class="result-row">
-            <code id="result-panel-url" class="result-value url"></code>
-            <button class="copy-btn" onclick="copy('result-panel-url')">Copy</button>
-          </div>
-          <p class="help">This URL will work after you complete Step 1.</p>
-        </div>
-
-        <button class="btn-primary" id="openInstallBtn" onclick="window.open(document.getElementById('result-install-url').textContent, '_blank')">Open Install Page</button>
+        <h2 id="result-title">Done!</h2>
+        <p class="step-desc" id="result-desc"></p>
+        <div id="result-body"></div>
+        <button class="btn-primary" id="resultBtn" onclick="goBack()">Back to Menu</button>
       </div>
 
-      <div class="footer">XrayMOD Installer — Secure Proxy Panel</div>
+      <div class="footer">XrayMOD Installer v2.0</div>
     </div>
   </div>
   <script src="/static/app.js"></script>

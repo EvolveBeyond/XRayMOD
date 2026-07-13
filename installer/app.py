@@ -1,4 +1,4 @@
-"""XRayMOD Installer — FastAPI + WebUI with OAuth2 PKCE."""
+"""XRayMOD Installer — FastAPI + WebUI with OAuth2, deploy, update, delete."""
 from __future__ import annotations
 
 import logging
@@ -13,24 +13,18 @@ from fastapi.staticfiles import StaticFiles
 from .cf_api import (
     CFClient, CFApiError, get_oauth_url, start_oauth_server, wait_for_oauth,
     create_d1, deploy_worker, get_worker_url, enable_subdomain, verify_token,
+    get_worker_account, delete_worker, delete_d1,
 )
 from .config import load, save
 from .deployer import fetch_worker_code, generate_password
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("xraymod.installer")
 
 app = FastAPI(title="XRayMOD Installer")
-
 STATIC_DIR = Path(__file__).parent / "static"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-# Start OAuth callback server on startup
 start_oauth_server()
 
 
@@ -47,131 +41,159 @@ async def health():
 @app.get("/api/status")
 async def status():
     config = load()
-    if config.get("worker_url"):
-        return {"installed": True, "worker_url": config["worker_url"], "mode": config.get("mode", "cloudflare")}
-    return {"installed": False}
+    return {
+        "installed": bool(config.get("worker_url")),
+        "worker_url": config.get("worker_url", ""),
+        "worker_name": config.get("worker_name", ""),
+        "d1_name": config.get("d1_name", ""),
+        "account_name": config.get("account_name", ""),
+        "mode": config.get("mode", ""),
+    }
 
 
 @app.get("/api/oauth/url")
 async def oauth_url():
-    """Get OAuth2 authorization URL."""
-    url = get_oauth_url()
-    return {"url": url}
+    return {"url": get_oauth_url()}
 
 
 @app.post("/api/oauth/wait")
 async def oauth_wait(request: Request):
-    """Wait for OAuth callback and return token."""
     body = await request.json()
-    timeout = body.get("timeout", 300)
-
-    result = wait_for_oauth(timeout=timeout)
-
+    result = wait_for_oauth(timeout=body.get("timeout", 300))
     if not result or not result.get("ok"):
-        error = result.get("error", "OAuth failed") if result else "Timeout"
-        return JSONResponse({"error": error}, 400)
-
-    # Get account info
+        return JSONResponse({"error": result.get("error", "Failed") if result else "Timeout"}, 400)
     try:
         account = verify_token(result["access_token"])
-        return {
-            "success": True,
-            "access_token": result["access_token"],
-            "account": account,
-        }
+        return {"success": True, "access_token": result["access_token"], "account": account}
     except CFApiError as e:
         return JSONResponse({"error": str(e)}, 400)
 
 
 @app.post("/api/deploy")
 async def deploy_endpoint(request: Request):
-    """Deploy using OAuth token. Password is set here, not in /install page."""
     body = await request.json()
     access_token = body.get("access_token", "").strip()
-    worker_name = body.get("worker_name", f"cf-{secrets.token_hex(6)}")
-    d1_name = body.get("d1_name", f"{worker_name}-db")
+    worker_name = body.get("worker_name", "") or f"cf-{secrets.token_hex(6)}"
+    d1_name = body.get("d1_name", "") or f"{worker_name}-db"
     admin_password = body.get("admin_password", "").strip()
 
     if not access_token:
-        return JSONResponse({"error": "Access token is required"}, 400)
-
+        return JSONResponse({"error": "Access token required"}, 400)
     if not admin_password or len(admin_password) < 4:
-        return JSONResponse({"error": "Admin password must be at least 4 characters"}, 400)
+        return JSONResponse({"error": "Password must be at least 4 characters"}, 400)
 
     try:
         cf = CFClient(access_token)
+        account_id, account_name = get_worker_account(access_token)
+        logger.info(f"Deploying to: {account_name}")
 
-        # Get account
-        account_data = cf.req("GET", "/accounts?per_page=1")
-        account_id = account_data["result"][0]["id"]
-        account_name = account_data["result"][0]["name"]
-
-        logger.info(f"Deploying to account: {account_name} ({account_id})")
-
-        # Create D1
         d1 = create_d1(cf, account_id, d1_name)
-
-        # Fetch worker code
         worker_code = fetch_worker_code()
-
-        # Deploy worker with password in env var
         deploy_worker(cf, account_id, worker_name, worker_code, d1["id"], admin_password)
-
-        # Enable subdomain
         enable_subdomain(cf, account_id, worker_name)
-
-        # Get URL
         worker_url = get_worker_url(cf, account_id, worker_name)
 
-        # Generate access UUID (will be set on first /install visit)
-        # For now, show the /install URL
-        install_url = f"{worker_url}/install"
-
-        # Save config
         save({
-            "access_token": access_token,
-            "worker_name": worker_name,
-            "d1_name": d1_name,
-            "d1_id": d1["id"],
-            "worker_url": worker_url,
-            "install_url": install_url,
-            "account_id": account_id,
-            "account_name": account_name,
-            "mode": "cloudflare",
+            "access_token": access_token, "worker_name": worker_name,
+            "d1_name": d1_name, "d1_id": d1["id"], "worker_url": worker_url,
+            "account_id": account_id, "account_name": account_name, "mode": "cloudflare",
         })
 
-        logger.info(f"Deployment complete: {worker_url}")
-        logger.info(f"First visit: {install_url}")
-
         return {
-            "success": True,
-            "worker_name": worker_name,
-            "worker_url": worker_url,
-            "install_url": install_url,
-            "d1_database": d1_name,
-            "d1_id": d1["id"],
-            "admin_password": admin_password,
-            "account_name": account_name,
-            "message": "Visit the install URL to complete setup",
+            "success": True, "worker_name": worker_name, "worker_url": worker_url,
+            "d1_database": d1_name, "d1_id": d1["id"],
+            "admin_password": admin_password, "account_name": account_name,
         }
     except CFApiError as e:
-        logger.error(f"Deployment failed: {e}")
         return JSONResponse({"error": str(e)}, 500)
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return JSONResponse({"error": f"Unexpected error: {e}"}, 500)
+        return JSONResponse({"error": str(e)}, 500)
 
 
-@app.post("/api/deploy-server")
-async def deploy_server(request: Request):
-    return JSONResponse({"error": "VPS deployment coming in Phase 2"}, 501)
+@app.post("/api/update")
+async def update_endpoint(request: Request):
+    body = await request.json()
+    access_token = body.get("access_token", "").strip() or load().get("access_token", "")
+    admin_password = body.get("admin_password", "").strip()
+
+    if not access_token:
+        return JSONResponse({"error": "Access token required"}, 400)
+
+    config = load()
+    worker_name = config.get("worker_name", "")
+    d1_id = config.get("d1_id", "")
+
+    if not worker_name or not d1_id:
+        return JSONResponse({"error": "No existing deployment found. Deploy first."}, 400)
+
+    if not admin_password or len(admin_password) < 4:
+        return JSONResponse({"error": "Password must be at least 4 characters"}, 400)
+
+    try:
+        cf = CFClient(access_token)
+        account_id = config.get("account_id", "")
+
+        worker_code = fetch_worker_code()
+        deploy_worker(cf, account_id, worker_name, worker_code, d1_id, admin_password)
+        enable_subdomain(cf, account_id, worker_name)
+        worker_url = get_worker_url(cf, account_id, worker_name)
+
+        save({**config, "worker_url": worker_url, "access_token": access_token})
+
+        return {"success": True, "worker_name": worker_name, "worker_url": worker_url}
+    except CFApiError as e:
+        return JSONResponse({"error": str(e)}, 500)
+
+
+@app.post("/api/delete")
+async def delete_endpoint(request: Request):
+    body = await request.json()
+    access_token = body.get("access_token", "").strip() or load().get("access_token", "")
+    confirm = body.get("confirm", "")
+
+    if not access_token:
+        return JSONResponse({"error": "Access token required"}, 400)
+    if confirm != "DELETE":
+        return JSONResponse({"error": "Type DELETE to confirm"}, 400)
+
+    config = load()
+    worker_name = config.get("worker_name", "")
+    d1_id = config.get("d1_id", "")
+    account_id = config.get("account_id", "")
+
+    if not worker_name:
+        return JSONResponse({"error": "No deployment found"}, 400)
+
+    try:
+        cf = CFClient(access_token)
+        results = {"worker": False, "d1": False}
+
+        try:
+            delete_worker(cf, account_id, worker_name)
+            results["worker"] = True
+        except CFApiError as e:
+            results["worker_error"] = str(e)
+
+        if d1_id:
+            try:
+                delete_d1(cf, account_id, d1_id)
+                results["d1"] = True
+            except CFApiError as e:
+                results["d1_error"] = str(e)
+
+        # Clear saved config
+        save({"access_token": access_token})
+
+        return {"success": True, "results": results}
+    except CFApiError as e:
+        return JSONResponse({"error": str(e)}, 500)
 
 
 def main():
     import uvicorn
     config = load()
     if not config.get("worker_url"):
-        print("\n  Opening installer in your browser...")
+        print("\n  Opening installer...")
         webbrowser.open("http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
