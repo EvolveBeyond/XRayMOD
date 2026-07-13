@@ -1578,62 +1578,70 @@ function buildTrojanResponse() {
 __name(buildTrojanResponse, "buildTrojanResponse");
 
 // worker/proxy/index.ts
+function getConnection(request) {
+  const fetcher = request?.fetcher;
+  if (!fetcher?.connect) {
+    throw new Error("fetcher.connect unavailable");
+  }
+  return fetcher.connect;
+}
+__name(getConnection, "getConnection");
 async function handleProxyTraffic(request, env2, _ctx) {
   const url = new URL(request.url);
-  const path = url.pathname;
-  const config2 = await env2.DB.prepare(
+  const \u0645\u0633\u06CC\u0631 = url.pathname;
+  const \u06A9\u0627\u0646\u0641\u06CC\u06AF = await env2.DB.prepare(
     "SELECT c.*, p.id as proto_id, p.template_json FROM configs c LEFT JOIN protocols p ON c.protocol_id = p.id WHERE c.path = ?"
-  ).bind(path).first();
-  if (!config2) {
+  ).bind(\u0645\u0633\u06CC\u0631).first();
+  if (!\u06A9\u0627\u0646\u0641\u06CC\u06AF) {
     return new Response("Not found", { status: 404 });
   }
-  const user = await env2.DB.prepare(
+  const \u06A9\u0627\u0631\u0628\u0631 = await env2.DB.prepare(
     "SELECT id, uuid, traffic_limit, traffic_used, status, expiry_date FROM users WHERE id = ?"
-  ).bind(config2.user_id).first();
-  if (!user || user.status !== "active") {
+  ).bind(\u06A9\u0627\u0646\u0641\u06CC\u06AF.user_id).first();
+  if (!\u06A9\u0627\u0631\u0628\u0631 || \u06A9\u0627\u0631\u0628\u0631.status !== "active") {
     return new Response("Forbidden", { status: 403 });
   }
-  if (user.traffic_limit > 0 && user.traffic_used >= user.traffic_limit) {
+  if (\u06A9\u0627\u0631\u0628\u0631.traffic_limit > 0 && \u06A9\u0627\u0631\u0628\u0631.traffic_used >= \u06A9\u0627\u0631\u0628\u0631.traffic_limit) {
     return new Response("Quota exceeded", { status: 403 });
   }
-  if (user.expiry_date && new Date(user.expiry_date) < /* @__PURE__ */ new Date()) {
+  if (\u06A9\u0627\u0631\u0628\u0631.expiry_date && new Date(\u06A9\u0627\u0631\u0628\u0631.expiry_date) < /* @__PURE__ */ new Date()) {
     return new Response("Subscription expired", { status: 403 });
   }
-  const upgradeHeader = request.headers.get("Upgrade");
-  if (upgradeHeader !== "websocket") {
+  const \u0647\u062F\u0631_\u0627\u0631\u062A\u0642\u0627 = request.headers.get("Upgrade");
+  if (\u0647\u062F\u0631_\u0627\u0631\u062A\u0642\u0627 !== "websocket") {
     return new Response("Expected WebSocket upgrade", { status: 426 });
   }
-  const [clientWs, serverWs] = Object.values(new WebSocketPair());
-  const protocol = config2.protocol_id;
-  serverWs.accept();
-  handleWebSocketConnection(
-    serverWs,
-    protocol,
-    config2,
-    user,
+  const [\u06A9\u0644\u0627\u06CC\u0646\u062A_\u0648\u06CC\u200C\u0627\u0633, \u0633\u0631\u0648\u0631_\u0648\u06CC\u200C\u0627\u0633] = Object.values(new WebSocketPair());
+  \u0633\u0631\u0648\u0631_\u0648\u06CC\u200C\u0627\u0633.accept();
+  \u067E\u0631\u062F\u0627\u0632\u0634_\u0627\u062A\u0635\u0627\u0644(
+    \u0633\u0631\u0648\u0631_\u0648\u06CC\u200C\u0627\u0633,
+    request,
+    \u06A9\u0627\u0646\u0641\u06CC\u06AF.protocol_id,
+    \u06A9\u0627\u0646\u0641\u06CC\u06AF,
+    \u06A9\u0627\u0631\u0628\u0631,
     env2.DB
   ).catch((err) => {
     console.error("WebSocket error:", err);
     try {
-      serverWs.close(1011, "Internal error");
+      \u0633\u0631\u0648\u0631_\u0648\u06CC\u200C\u0627\u0633.close(1011, "Internal error");
     } catch {
     }
   });
   return new Response(null, {
     status: 101,
-    webSocket: clientWs
+    webSocket: \u06A9\u0644\u0627\u06CC\u0646\u062A_\u0648\u06CC\u200C\u0627\u0633
   });
 }
 __name(handleProxyTraffic, "handleProxyTraffic");
-async function handleWebSocketConnection(ws, protocol, config2, user, db) {
-  let totalUpload = 0;
-  let totalDownload = 0;
-  const firstMessage = await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error("Timeout")), 1e4);
-    ws.addEventListener(
+async function \u067E\u0631\u062F\u0627\u0632\u0634_\u0627\u062A\u0635\u0627\u0644(\u0648\u06CC\u200C\u0627\u0633, \u062F\u0631\u062E\u0648\u0627\u0633\u062A, \u067E\u0631\u0648\u062A\u06A9\u0644, \u06A9\u0627\u0646\u0641\u06CC\u06AF, \u06A9\u0627\u0631\u0628\u0631, \u067E\u0627\u06CC\u06AF\u0627\u0647) {
+  let \u062D\u062C\u0645_\u0622\u067E\u0644\u0648\u062F = 0;
+  let \u062D\u062C\u0645_\u062F\u0627\u0646\u0644\u0648\u062F = 0;
+  const \u0627\u0648\u0644\u06CC\u0646_\u067E\u06CC\u0627\u0645 = await new Promise((resolve, reject) => {
+    const \u062A\u0627\u06CC\u0645\u0631 = setTimeout(() => reject(new Error("Timeout")), 1e4);
+    \u0648\u06CC\u200C\u0627\u0633.addEventListener(
       "message",
       (event) => {
-        clearTimeout(timeout);
+        clearTimeout(\u062A\u0627\u06CC\u0645\u0631);
         if (event.data instanceof ArrayBuffer) {
           resolve(event.data);
         } else if (event.data instanceof Blob) {
@@ -1644,75 +1652,101 @@ async function handleWebSocketConnection(ws, protocol, config2, user, db) {
       },
       { once: true }
     );
-    ws.addEventListener("close", () => {
-      clearTimeout(timeout);
+    \u0648\u06CC\u200C\u0627\u0633.addEventListener("close", () => {
+      clearTimeout(\u062A\u0627\u06CC\u0645\u0631);
       reject(new Error("Closed"));
     });
   });
-  totalUpload += firstMessage.byteLength;
-  let targetHost = "";
-  let targetPort = 0;
-  if (protocol === "vless-reality" || protocol === "vless-ws") {
-    const parsed = parseVlessHeader(firstMessage);
-    if (!parsed) {
-      ws.close(1008, "Invalid VLESS header");
+  \u062D\u062C\u0645_\u0622\u067E\u0644\u0648\u062F += \u0627\u0648\u0644\u06CC\u0646_\u067E\u06CC\u0627\u0645.byteLength;
+  let \u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F = "";
+  let \u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F = 0;
+  if (\u067E\u0631\u0648\u062A\u06A9\u0644 === "vless-reality" || \u067E\u0631\u0648\u062A\u06A9\u0644 === "vless-ws") {
+    const \u0646\u062A\u06CC\u062C\u0647 = parseVlessHeader(\u0627\u0648\u0644\u06CC\u0646_\u067E\u06CC\u0627\u0645);
+    if (!\u0646\u062A\u06CC\u062C\u0647) {
+      \u0648\u06CC\u200C\u0627\u0633.close(1008, "Invalid VLESS header");
       return;
     }
-    targetHost = parsed.address;
-    targetPort = parsed.port;
-    ws.send(buildVlessResponse());
-  } else if (protocol === "trojan-ws") {
-    const parsed = parseTrojanHeader(firstMessage);
-    if (!parsed) {
-      ws.close(1008, "Invalid Trojan header");
+    \u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F = \u0646\u062A\u06CC\u062C\u0647.address;
+    \u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F = \u0646\u062A\u06CC\u062C\u0647.port;
+    \u0648\u06CC\u200C\u0627\u0633.send(buildVlessResponse());
+  } else if (\u067E\u0631\u0648\u062A\u06A9\u0644 === "trojan-ws") {
+    const \u0646\u062A\u06CC\u062C\u0647 = parseTrojanHeader(\u0627\u0648\u0644\u06CC\u0646_\u067E\u06CC\u0627\u0645);
+    if (!\u0646\u062A\u06CC\u062C\u0647) {
+      \u0648\u06CC\u200C\u0627\u0633.close(1008, "Invalid Trojan header");
       return;
     }
-    targetHost = parsed.address;
-    targetPort = parsed.port;
-    ws.send(buildTrojanResponse());
+    \u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F = \u0646\u062A\u06CC\u062C\u0647.address;
+    \u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F = \u0646\u062A\u06CC\u062C\u0647.port;
+    \u0648\u06CC\u200C\u0627\u0633.send(buildTrojanResponse());
   } else {
-    const settings = JSON.parse(config2.settings_json || "{}");
-    targetHost = settings.host || settings.sni || "example.com";
-    targetPort = settings.port || 443;
+    const \u062A\u0646\u0638\u06CC\u0645\u0627\u062A = JSON.parse(\u06A9\u0627\u0646\u0641\u06CC\u06AF.settings_json || "{}");
+    \u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F = \u062A\u0646\u0638\u06CC\u0645\u0627\u062A.host || \u062A\u0646\u0638\u06CC\u0645\u0627\u062A.sni || "example.com";
+    \u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F = \u062A\u0646\u0638\u06CC\u0645\u0627\u062A.port || 443;
   }
   try {
-    const targetUrl = `wss://${targetHost}:${targetPort}`;
-    const targetWs = new WebSocket(targetUrl);
-    await new Promise((resolve, reject) => {
-      targetWs.addEventListener("open", () => resolve(), { once: true });
-      targetWs.addEventListener("error", (e) => reject(e), { once: true });
-      setTimeout(() => reject(new Error("Target connection timeout")), 1e4);
+    const \u0627\u062A\u0635\u0627\u0644 = getConnection(\u062F\u0631\u062E\u0648\u0627\u0633\u062A);
+    const \u0633\u0648\u06A9\u062A_\u0645\u0642\u0635\u062F = await \u0627\u062A\u0635\u0627\u0644({
+      hostname: \u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F,
+      port: \u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F
     });
-    ws.addEventListener("message", async (event) => {
-      const data = event.data instanceof ArrayBuffer ? event.data : event.data instanceof Blob ? await event.data.arrayBuffer() : new TextEncoder().encode(String(event.data)).buffer;
-      totalUpload += data.byteLength;
-      targetWs.send(data);
+    const \u062E\u0648\u0627\u0646\u0646\u062F\u0647 = \u0633\u0648\u06A9\u062A_\u0645\u0642\u0635\u062F.readable?.getReader();
+    const \u0646\u0648\u06CC\u0633\u0646\u062F\u0647 = \u0633\u0648\u06A9\u062A_\u0645\u0642\u0635\u062F.writable?.getWriter();
+    if (!\u062E\u0648\u0627\u0646\u0646\u062F\u0647 || !\u0646\u0648\u06CC\u0633\u0646\u062F\u0647) {
+      throw new Error("Invalid socket streams");
+    }
+    await \u0646\u0648\u06CC\u0633\u0646\u062F\u0647.write(\u0627\u0648\u0644\u06CC\u0646_\u067E\u06CC\u0627\u0645);
+    \u0648\u06CC\u200C\u0627\u0633.addEventListener("message", async (event) => {
+      const \u062F\u0627\u062F\u0647 = event.data instanceof ArrayBuffer ? event.data : event.data instanceof Blob ? await event.data.arrayBuffer() : new TextEncoder().encode(String(event.data)).buffer;
+      \u062D\u062C\u0645_\u0622\u067E\u0644\u0648\u062F += \u062F\u0627\u062F\u0647.byteLength;
+      try {
+        await \u0646\u0648\u06CC\u0633\u0646\u062F\u0647.write(\u062F\u0627\u062F\u0647);
+      } catch {
+      }
     });
-    targetWs.addEventListener("message", async (event) => {
-      const data = event.data instanceof ArrayBuffer ? event.data : event.data instanceof Blob ? await event.data.arrayBuffer() : new TextEncoder().encode(String(event.data)).buffer;
-      totalDownload += data.byteLength;
-      ws.send(data);
+    const \u062E\u0648\u0627\u0646\u062F\u0646_\u067E\u0627\u0633\u062E = /* @__PURE__ */ __name(async () => {
+      try {
+        while (true) {
+          const { value, done } = await \u062E\u0648\u0627\u0646\u0646\u062F\u0647.read();
+          if (done) break;
+          if (value) {
+            \u062D\u062C\u0645_\u062F\u0627\u0646\u0644\u0648\u062F += value.byteLength;
+            \u0648\u06CC\u200C\u0627\u0633.send(value);
+          }
+        }
+      } catch {
+      }
+    }, "\u062E\u0648\u0627\u0646\u062F\u0646_\u067E\u0627\u0633\u062E");
+    \u062E\u0648\u0627\u0646\u062F\u0646_\u067E\u0627\u0633\u062E();
+    \u0648\u06CC\u200C\u0627\u0633.addEventListener("close", async () => {
+      try {
+        await \u0646\u0648\u06CC\u0633\u0646\u062F\u0647.close();
+      } catch {
+      }
+      try {
+        await \u0633\u0648\u06A9\u062A_\u0645\u0642\u0635\u062F.close?.();
+      } catch {
+      }
     });
-    ws.addEventListener("close", () => {
-      targetWs.close();
-    });
-    targetWs.addEventListener("close", () => {
-      ws.close();
+    \u0633\u0648\u06A9\u062A_\u0645\u0642\u0635\u062F.closed?.then?.(() => {
+      try {
+        \u0648\u06CC\u200C\u0627\u0633.close();
+      } catch {
+      }
     });
   } catch (err) {
-    console.log(`Target ${targetHost}:${targetPort} not reachable, keeping proxy alive`);
+    console.log(`\u0627\u062A\u0635\u0627\u0644 \u0628\u0647 ${\u0645\u06CC\u0632\u0628\u0627\u0646_\u0645\u0642\u0635\u062F}:${\u067E\u0648\u0631\u062A_\u0645\u0642\u0635\u062F} \u0646\u0627\u0645\u0648\u0641\u0642 \u0628\u0648\u062F`);
   }
-  ws.addEventListener("close", async () => {
+  \u0648\u06CC\u200C\u0627\u0633.addEventListener("close", async () => {
     try {
-      await db.prepare(
+      await \u067E\u0627\u06CC\u06AF\u0627\u0647.prepare(
         "UPDATE users SET traffic_used = traffic_used + ? WHERE id = ?"
-      ).bind(totalUpload + totalDownload, user.id).run();
+      ).bind(\u062D\u062C\u0645_\u0622\u067E\u0644\u0648\u062F + \u062D\u062C\u0645_\u062F\u0627\u0646\u0644\u0648\u062F, \u06A9\u0627\u0631\u0628\u0631.id).run();
     } catch (err) {
-      console.error("Failed to update traffic:", err);
+      console.error("\u062E\u0637\u0627 \u062F\u0631 \u0628\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06CC \u062A\u0631\u0627\u0641\u06CC\u06A9:", err);
     }
   });
 }
-__name(handleWebSocketConnection, "handleWebSocketConnection");
+__name(\u067E\u0631\u062F\u0627\u0632\u0634_\u0627\u062A\u0635\u0627\u0644, "\u067E\u0631\u062F\u0627\u0632\u0634_\u0627\u062A\u0635\u0627\u0644");
 
 // worker/processors/proxy.ts
 var proxyProcessor = /* @__PURE__ */ __name(async (intent, request, env2, ctx) => {
