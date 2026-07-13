@@ -21,12 +21,16 @@
 - [x] DataTable, Toggle, EmptyState
 
 ### Config
-- [ ] Protocol selection (VLESS/Trojan/SS)
-- [ ] Host management (add/remove/health)
-- [ ] Path configuration
-- [ ] Transport settings (WS/gRPC/XHTTP)
-- [ ] TLS settings (fingerprint, ECH, 0-RTT)
-- [ ] Subscription template preview
+- [x] Protocol selection (VLESS/Trojan/SS)
+- [x] Host management (add/remove)
+- [x] Path configuration
+- [x] Transport settings (WS/gRPC/XHTTP/TCP)
+- [x] TLS settings (fingerprint, security mode)
+- [x] ECH settings (toggle + SNI)
+- [x] TLS Fragment (toggle + ranges)
+- [x] Subscription settings (name, formats, mixed)
+- [x] Service control (pause)
+- [ ] Host health indicators
 
 ### Users
 - [ ] User list with search/filter
