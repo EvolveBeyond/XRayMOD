@@ -26,7 +26,7 @@ function hostMatchesProxyList(host) {
 	const lists = connProxyWhitelist.length ? SOCKS5白名单.concat(connProxyWhitelist) : SOCKS5白名单;
 	return lists.some(p => { try { return new RegExp(`^${String(p).trim().replace(/\*/g, '.*')}$`, 'i').test(host); } catch (e) { return false; } });
 }
-const Pages静态页面 = (globalThis.__env?.PAGES_URL) || 'https://xraymod-panel.github.io/';
+const Pages静态页面 = 'https://nova-panel.github.io/';
 const NOVA_FREE_NOTICE = '🎁 XRayMOD رایگان است، برای آن به کسی پول ندهید';
 globalThis.__workerStart = Date.now();
 // --- Config JSON cache: avoids repeated KV reads on every request ---
