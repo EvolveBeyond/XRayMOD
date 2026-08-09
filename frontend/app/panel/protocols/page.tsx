@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { Shield, Plus, Trash2, Edit2, Copy, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardHeader, Button, Input, StatusBadge, EmptyState } from '@/components';
+import { ProtocolTestDialog } from '@/components/twa/protocol-test-dialog';
+import { TwaI18nProvider } from '@/lib/twa/i18n';
 
 interface Protocol {
   id: string;
@@ -24,6 +26,7 @@ export default function ProtocolsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Protocol | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTest, setShowTest] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -83,9 +86,14 @@ export default function ProtocolsPage() {
           <p className="text-zinc-500 text-sm mt-1">مدیریت پروتکل‌ها و ترنسپورت</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowTest(true)}>تست سایت</Button>
           <Button variant="secondary" onClick={copySubLink}><Copy size={14} /> کپی لینک ساب</Button>
         </div>
       </div>
+
+      <TwaI18nProvider>
+        <ProtocolTestDialog open={showTest} onClose={() => setShowTest(false)} />
+      </TwaI18nProvider>
 
       {/* Protocol Cards */}
       {loading ? (

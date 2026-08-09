@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Telegram operator bot (`telegram-bot/`) — create / list / delete / update panels with Persian reply keyboard and step progress
 - Client-path Clean IP scan with ranked recommendations from the visitor network
 - Dual-author credit: Askar Niroomand & Pakrohk
+- Telegram Mini App UI (`/twa/*`) — manager invite scoping, bento dashboards, 6-language RTL/LTR stubs
 
 ### Changed
 - Panel UI branding normalized to XRayMOD (removed internal theme codenames from user-facing chrome)

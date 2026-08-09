@@ -1,13 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Globe, Activity, Wifi, ArrowUpRight, Shield, Radar, Copy, Crosshair } from 'lucide-react';
+import {
+  Users,
+  Globe,
+  Wifi,
+  ArrowUpRight,
+  Shield,
+  Radar,
+  Copy,
+  Crosshair,
+  Smartphone,
+} from 'lucide-react';
 import { api, asList } from '@/lib/api';
-import { StatCard, Card, CardHeader, ProgressBar, Button, PageHeader } from '@/components';
+import { CardHeader, ProgressBar, Button, PageHeader } from '@/components';
 import { PanelLink } from '@/components/panel-link';
 import { useI18n } from '@/lib/i18n';
 import { getPanelPrefix, secureSubUrl } from '@/lib/paths';
 import { toast } from 'sonner';
+import { BentoCell, DashboardBentoLayout } from '@/components/twa/dashboard-bento-layout';
 
 interface SystemStatus {
   uptime: string;
@@ -57,9 +68,10 @@ export default function DashboardPage() {
 
   const today = status?.traffic?.today;
   const month = status?.traffic?.month;
+  const activePct = users.total ? Math.round((users.active / users.total) * 100) : 0;
 
   return (
-    <div className="page-shell space-y-7">
+    <div className="page-shell space-y-6">
       <PageHeader
         eyebrow="XRayMOD"
         title={t('dashboard')}
@@ -76,6 +88,11 @@ export default function DashboardPage() {
                 <Crosshair size={14} /> Admin
               </Button>
             </PanelLink>
+            <a href="/twa/user?ref=owner_demo" target="_blank" rel="noreferrer">
+              <Button size="sm" variant="secondary">
+                <Smartphone size={14} /> Mini App
+              </Button>
+            </a>
             <PanelLink href="/panel/cleanip">
               <Button size="sm">
                 <Radar size={14} /> {t('scanClean')}
@@ -85,70 +102,76 @@ export default function DashboardPage() {
         }
       />
 
-      <section className="hero-band">
-        <div className="relative z-[1] flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="chip chip-live">v{status?.version || '5.1.1'}</span>
-              <span className={status?.configured ? 'chip chip-live' : 'chip chip-warn'}>
-                {status?.configured ? t('active') : 'Setup pending'}
-              </span>
+      <DashboardBentoLayout>
+        <BentoCell span={12}>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="chip chip-live">v{status?.version || '5.1.1'}</span>
+                <span className={status?.configured ? 'chip chip-live' : 'chip chip-warn'}>
+                  {status?.configured ? t('active') : 'Setup pending'}
+                </span>
+              </div>
+              <h2 className="font-display text-xl md:text-2xl font-bold tracking-tight">
+                XrayMOD control plane
+              </h2>
+              <p className="text-sm text-[var(--text-muted)] max-w-md">
+                SECURE PATH · silent 404 · Admin Dashboard · Telegram Mini App
+              </p>
             </div>
-            <h2 className="font-display text-xl md:text-2xl font-bold tracking-tight max-w-lg">
-              XrayMOD control plane
-            </h2>
-            <p className="text-sm text-[var(--text-muted)] max-w-md leading-relaxed">
-              SECURE PATH · silent 404 · Admin Dashboard · D-tagged domains
-            </p>
+            <div className="flex flex-wrap gap-2">
+              <PanelLink href="/panel/stealth">
+                <Button size="sm" variant="secondary">
+                  <Shield size={14} /> {t('stealth')}
+                </Button>
+              </PanelLink>
+              <PanelLink href="/panel/config">
+                <Button size="sm" variant="secondary">
+                  {t('config')} <ArrowUpRight size={14} />
+                </Button>
+              </PanelLink>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <PanelLink href="/panel/stealth">
-              <Button size="sm" variant="secondary">
-                <Shield size={14} /> {t('stealth')}
-              </Button>
-            </PanelLink>
-            <PanelLink href="/panel/config">
-              <Button size="sm" variant="secondary">
-                {t('config')} <ArrowUpRight size={14} />
-              </Button>
-            </PanelLink>
-          </div>
-        </div>
-      </section>
+        </BentoCell>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard
-          title={t('users')}
-          value={String(users.total)}
-          subtitle={`${users.active} ${t('active')}`}
-          icon={Users}
-          color="emerald"
-        />
-        <StatCard
-          title={t('status')}
-          value={status?.configured ? t('active') : 'Setup'}
-          subtitle={status?.version || '5.1.1'}
-          icon={Wifi}
-          color={status?.configured ? 'emerald' : 'amber'}
-        />
-        <StatCard
-          title={t('todayTraffic')}
-          value={formatBytes(today?.total || 0)}
-          subtitle={`↑ ${formatBytes(today?.up || 0)} / ↓ ${formatBytes(today?.down || 0)}`}
-          icon={Activity}
-          color="blue"
-        />
-        <StatCard
-          title={t('monthTraffic')}
-          value={formatBytes(month?.total || 0)}
-          subtitle={t('total')}
-          icon={Globe}
-          color="rose"
-        />
-      </div>
+        <BentoCell span={3}>
+          <p className="text-[11px] text-[var(--text-faint)] uppercase tracking-wide">{t('users')}</p>
+          <p className="mt-2 font-display text-3xl font-bold tabular">{users.total}</p>
+          <p className="text-[12px] text-[var(--text-muted)] mt-1">
+            {users.active} {t('active')} · {activePct}%
+          </p>
+        </BentoCell>
+        <BentoCell span={3}>
+          <p className="text-[11px] text-[var(--text-faint)] uppercase tracking-wide">{t('status')}</p>
+          <p className="mt-2 font-display text-2xl font-bold">
+            {status?.configured ? t('active') : 'Setup'}
+          </p>
+          <p className="text-[12px] text-[var(--text-muted)] mt-1 font-mono">
+            {status?.version || '5.1.1'}
+          </p>
+        </BentoCell>
+        <BentoCell span={3}>
+          <p className="text-[11px] text-[var(--text-faint)] uppercase tracking-wide">
+            {t('todayTraffic')}
+          </p>
+          <p className="mt-2 font-display text-2xl font-bold tabular">
+            {formatBytes(today?.total || 0)}
+          </p>
+          <p className="text-[11px] text-[var(--text-faint)] mt-1 font-mono">
+            ↑ {formatBytes(today?.up || 0)} / ↓ {formatBytes(today?.down || 0)}
+          </p>
+        </BentoCell>
+        <BentoCell span={3}>
+          <p className="text-[11px] text-[var(--text-faint)] uppercase tracking-wide">
+            {t('monthTraffic')}
+          </p>
+          <p className="mt-2 font-display text-2xl font-bold tabular">
+            {formatBytes(month?.total || 0)}
+          </p>
+          <p className="text-[11px] text-[var(--text-faint)] mt-1">{t('total')}</p>
+        </BentoCell>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Card>
+        <BentoCell span={6}>
           <CardHeader title={t('systemInfo')} description="Runtime health snapshot" />
           <div className="space-y-0.5">
             {[
@@ -166,9 +189,9 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </Card>
+        </BentoCell>
 
-        <Card>
+        <BentoCell span={6}>
           <CardHeader title={t('traffic')} description="Upload / download this month" />
           <div className="space-y-5">
             <div>
@@ -186,13 +209,11 @@ export default function DashboardPage() {
               <ProgressBar value={month?.down || 0} max={Math.max(month?.total || 1, 1)} color="blue" />
             </div>
           </div>
-        </Card>
-      </div>
+        </BentoCell>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <PanelLink href="/panel/config" className="group block">
-          <Card className="h-full transition-colors hover:border-[var(--accent)]/35">
-            <div className="flex items-start gap-3">
+        <BentoCell span={4}>
+          <PanelLink href="/panel/config" className="group block h-full">
+            <div className="flex items-start gap-3 h-full">
               <div className="p-2 rounded-md bg-[var(--accent-soft)] text-[var(--accent)]">
                 <Shield size={16} strokeWidth={1.9} />
               </div>
@@ -200,15 +221,12 @@ export default function DashboardPage() {
                 <p className="font-display font-semibold text-sm">{t('config')}</p>
                 <p className="text-[11px] text-[var(--text-faint)] mt-1">{t('recommended')}</p>
               </div>
-              <ArrowUpRight
-                size={15}
-                className="text-[var(--text-faint)] group-hover:text-[var(--accent)] transition-colors"
-              />
+              <ArrowUpRight size={15} className="text-[var(--text-faint)] group-hover:text-[var(--accent)]" />
             </div>
-          </Card>
-        </PanelLink>
-        <PanelLink href="/panel/network" className="group block">
-          <Card className="h-full transition-colors hover:border-[var(--info)]/35">
+          </PanelLink>
+        </BentoCell>
+        <BentoCell span={4}>
+          <PanelLink href="/panel/network" className="group block h-full">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-md bg-[rgba(94,176,255,0.12)] text-[var(--info)]">
                 <Wifi size={16} strokeWidth={1.9} />
@@ -217,14 +235,11 @@ export default function DashboardPage() {
                 <p className="font-display font-semibold text-sm">{t('network')}</p>
                 <p className="text-[11px] text-[var(--text-faint)] mt-1">DNS · WARP · IPv6</p>
               </div>
-              <ArrowUpRight
-                size={15}
-                className="text-[var(--text-faint)] group-hover:text-[var(--info)] transition-colors"
-              />
+              <ArrowUpRight size={15} className="text-[var(--text-faint)] group-hover:text-[var(--info)]" />
             </div>
-          </Card>
-        </PanelLink>
-        <Card className="h-full">
+          </PanelLink>
+        </BentoCell>
+        <BentoCell span={4}>
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-md bg-[var(--coral-soft)] text-[var(--coral)]">
               <Globe size={16} strokeWidth={1.9} />
@@ -238,7 +253,7 @@ export default function DashboardPage() {
             {subHint && (
               <button
                 type="button"
-                className="text-[var(--text-faint)] hover:text-[var(--accent)] p-1 transition-colors"
+                className="text-[var(--text-faint)] hover:text-[var(--accent)] p-1"
                 onClick={() => {
                   navigator.clipboard.writeText(subHint);
                   toast.success(t('copied'));
@@ -248,8 +263,8 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
-        </Card>
-      </div>
+        </BentoCell>
+      </DashboardBentoLayout>
     </div>
   );
 }
