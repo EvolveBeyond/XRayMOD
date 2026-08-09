@@ -240,11 +240,6 @@ const DEFAULT_SETTINGS = {
   'panel.secret_key': '',
   'panel.admin_uuid': '',
   'panel.access_uuid': '',
-  'financial.referral_commission': '15',
-  'financial.min_withdrawal': '5',
-  'financial.tax_fee': '2',
-  'integrations.telegram_enabled': 'false',
-  'integrations.ton_wallet_enabled': 'false',
   'integrations.external_server_url': '',
   'disguise.enabled': 'true',
   'disguise.admin_path': '',
@@ -261,8 +256,6 @@ const DEFAULT_SETTINGS = {
   'ech.dns': 'https://dns.alidns.com/dns-query',
   'tls_fragment.enabled': 'false',
   'tls_fragment.mode': 'Shadowrocket',
-  'tg.bot_token': '',
-  'tg.chat_id': '',
   'panel.started_at': '',
   'panel.paused': 'false',
   'protocol.mixed_mode': 'false',
@@ -274,14 +267,11 @@ const DEFAULT_SETTINGS = {
   'panel.speed_profile': 'stable',
   'panel.sub_name': 'XRayMOD',
   'panel.sub_banner': 'Secure edge · Clean IP · Smart sub',
-  'panel.tg_login_enabled': 'false',
   'canary.blocked_ips': '[]',
   'canary.report': '{"hits":[],"blocked":[]}',
   'brand.config': '',
   'panel.nodes_json': '[]',
   'panel.custom_domains_weighted': '[]',
-  'alerts.enabled': 'true',
-  'tg.bot_username': '',
 };
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
@@ -345,84 +335,6 @@ const TABLES = [
     status TEXT DEFAULT 'pending',
     created_at INTEGER
   )`,
-  `CREATE TABLE IF NOT EXISTS managers (
-    id TEXT PRIMARY KEY,
-    role TEXT DEFAULT 'sponsor',
-    name TEXT NOT NULL,
-    welcome TEXT DEFAULT '',
-    commission_pct REAL DEFAULT 15,
-    parent_id TEXT DEFAULT '',
-    tg_id TEXT DEFAULT '',
-    status TEXT DEFAULT 'active',
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS plans (
-    id TEXT PRIMARY KEY,
-    manager_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    days INTEGER DEFAULT 30,
-    traffic_gb REAL DEFAULT 100,
-    price_stars REAL DEFAULT 0,
-    price_dai REAL DEFAULT 0,
-    active INTEGER DEFAULT 1,
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS wallets (
-    owner_key TEXT PRIMARY KEY,
-    stars REAL DEFAULT 0,
-    dai REAL DEFAULT 0,
-    gram REAL DEFAULT 0,
-    updated_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS wallet_tx (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_key TEXT NOT NULL,
-    manager_id TEXT DEFAULT '',
-    amount REAL NOT NULL,
-    currency TEXT DEFAULT 'stars',
-    type TEXT DEFAULT 'deposit',
-    status TEXT DEFAULT 'ok',
-    note TEXT DEFAULT '',
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS coupons (
-    code TEXT PRIMARY KEY,
-    manager_id TEXT DEFAULT '',
-    pct_off REAL DEFAULT 10,
-    max_uses INTEGER DEFAULT 0,
-    used_count INTEGER DEFAULT 0,
-    expires_at INTEGER DEFAULT 0,
-    active INTEGER DEFAULT 1,
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS referrals (
-    ref_code TEXT PRIMARY KEY,
-    manager_id TEXT NOT NULL,
-    clicks INTEGER DEFAULT 0,
-    conversions INTEGER DEFAULT 0,
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS orders (
-    id TEXT PRIMARY KEY,
-    buyer_key TEXT NOT NULL,
-    manager_id TEXT DEFAULT '',
-    plan_id TEXT NOT NULL,
-    amount REAL NOT NULL,
-    currency TEXT DEFAULT 'stars',
-    coupon TEXT DEFAULT '',
-    ref_code TEXT DEFAULT '',
-    status TEXT DEFAULT 'paid',
-    created_at INTEGER
-  )`,
-  `CREATE TABLE IF NOT EXISTS commissions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_id TEXT NOT NULL,
-    manager_id TEXT NOT NULL,
-    amount REAL NOT NULL,
-    currency TEXT DEFAULT 'stars',
-    pct REAL DEFAULT 0,
-    created_at INTEGER
-  )`,
 ];
 
 /** Per-isolate cache — avoid re-running heavy DDL/seed on every request */
@@ -473,8 +385,6 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
       'panel.cf_email_enforce',
       'panel.custom_domains',
       'panel.version',
-      'alerts.enabled',
-      'tg.bot_username',
     ] as const) {
       const def = (DEFAULT_SETTINGS as Record<string, string>)[k];
       if (def === undefined) continue;
@@ -497,14 +407,9 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
         .bind('panel.version', '5.1.1', nowSoft)
         .run();
-    }
-    // v5: commerce seed (managers/plans/coupons) — idempotent
-    if (version.v !== '5') {
-      const { ensureCommerceSeed } = await import('./lib/commerce');
-      await ensureCommerceSeed(db);
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-        .bind('schema.version', '5', nowSoft)
+        .bind('schema.version', '4', nowSoft)
         .run();
     }
     return;
@@ -584,11 +489,8 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
     /* ignore seed user failures */
   }
 
-  const { ensureCommerceSeed } = await import('./lib/commerce');
-  await ensureCommerceSeed(db);
-
   await db
     .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-    .bind('schema.version', '5', now)
+    .bind('schema.version', '4', now)
     .run();
 }

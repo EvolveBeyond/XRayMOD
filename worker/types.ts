@@ -2,15 +2,12 @@ export interface Env {
   DB: D1Database;
   KV?: KVNamespace;
   ASSETS?: { fetch: (request: Request) => Promise<Response> };
-  ENABLE_TELEGRAM: string;
-  ENABLE_TON_WALLET: string;
   EXTERNAL_SERVER_URL: string;
   DISGUISE_PAGE?: string;
   PANEL_RECOVERY?: string;
   ADMIN_PATH?: string;
   LOGIN_PATH?: string;
   SUB_PATH?: string;
-  TG_BOT_TOKEN?: string;
   CRYPTO_KEY?: string;
   PAGES_URL?: string;
   ADMIN_PASSWORD?: string;

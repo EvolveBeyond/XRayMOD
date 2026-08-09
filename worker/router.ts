@@ -19,7 +19,6 @@ import { handleWizard } from './api/wizard';
 import { handleTools } from './api/tools';
 import { handleAdmin } from './api/admin';
 import { handleLab } from './api/lab';
-import { handleCommerce } from './api/commerce';
 import { handleSubscription } from './subscription';
 import { handleUserPortal } from './user-portal';
 import { handleProxyTraffic } from './proxy';
@@ -33,7 +32,6 @@ import {
 } from './disguise';
 import { isGrpcRequest } from './proxy/grpc';
 import { isXHTTPRequest } from './proxy/xhttp';
-import { handleTelegramWebhook, handleTelegramLogin } from './telegram';
 import { serveStatic, serveRemotePages } from './static';
 import { renderLoginPage } from './panel-login';
 import { appendAudit, clientIp } from './lib/audit';
@@ -67,12 +65,9 @@ const routes: Route[] = [
   { pattern: /^\/api\/tools(?:\/([^/]+))?$/, handler: handleTools, params: ['action'] },
   { pattern: /^\/api\/admin(?:\/([^/]+))?$/, handler: handleAdmin, params: ['action'] },
   { pattern: /^\/api\/lab(?:\/([^/]+))?$/, handler: handleLab, params: ['action'] },
-  { pattern: /^\/api\/commerce(?:\/(.+))?$/, handler: handleCommerce, params: ['action'] },
   { pattern: /^\/sub\/([^/]+)$/, handler: handleSubscription, params: ['token'] },
   { pattern: /^\/me\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
   { pattern: /^\/status\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
-  { pattern: /^\/bot$/, handler: handleTelegramWebhook },
-  { pattern: /^\/admin$/, handler: handleTelegramLogin },
 ];
 
 function matchRoute(pathname: string): { handler: Handler; params: Record<string, string> } | null {

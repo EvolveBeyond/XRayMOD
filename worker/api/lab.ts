@@ -391,18 +391,6 @@ export async function handleLab(
     return json({ success: true, message: 'Rollback انجام شد' });
   }
 
-  // Telegram login bootstrap (store bot username for widget)
-  if (action === 'telegram-login' && (request.method === 'PUT' || request.method === 'POST')) {
-    type TgBody = { botUsername?: string; enabled?: boolean; adminTgIds?: string };
-    const body: TgBody = await request.json<TgBody>().catch(() => ({} as TgBody));
-    if (body.botUsername) await kvSet(env.DB, 'panel.tg_login_bot', String(body.botUsername));
-    if (typeof body.enabled === 'boolean') {
-      await kvSet(env.DB, 'panel.tg_login_enabled', body.enabled ? 'true' : 'false');
-    }
-    if (body.adminTgIds) await kvSet(env.DB, 'panel.tg_login_admins', String(body.adminTgIds));
-    return json({ success: true, message: 'ورود تلگرام تنظیم شد' });
-  }
-
   // Update job status passthrough
   if (action === 'update-job' && request.method === 'GET') {
     const job = await readUpdateJob(env.DB);
@@ -444,7 +432,6 @@ export const FEATURE_CATALOG = [
   { id: 'failover', title: 'Failover هوشمند', group: 'sub' },
   { id: 'live', title: 'داشبورد لحظه‌ای', group: 'ux' },
   { id: 'brand', title: 'وایت‌لیبل', group: 'ux' },
-  { id: 'tg-login', title: 'ورود تلگرام', group: 'ux' },
   { id: 'domains', title: 'دامنه وزنی', group: 'stealth' },
   { id: 'canary', title: 'Canary حرفه‌ای', group: 'stealth' },
   { id: 'presets', title: 'Fragment / Reality presets', group: 'stealth' },

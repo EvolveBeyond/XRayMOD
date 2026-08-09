@@ -307,12 +307,9 @@ database_id = "{d1_id}"
 preview_database_id = "{d1_id}"
 
 [vars]
-ENABLE_TELEGRAM = "false"
-ENABLE_TON_WALLET = "false"
 EXTERNAL_SERVER_URL = ""
 DISGUISE_PAGE = "404"
 PANEL_RECOVERY = "false"
-TG_BOT_TOKEN = ""
 CRYPTO_KEY = ""
 '''
     (REPO_ROOT / "wrangler.toml").write_text(content)

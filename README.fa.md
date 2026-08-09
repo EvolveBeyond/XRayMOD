@@ -256,7 +256,6 @@ https://WORKER.workers.dev/<SECURE_PATH>/me/<USER_UUID>
 | `worker/` | **منبع حقیقت تولید** — روتینگ، احراز هویت، ساب، پورتال |
 | `frontend/` | UI پنل ادمین |
 | `installer/` + `install.*` | نصب روی اکانت Cloudflare |
-| `telegram-bot/` | ربات اختیاری برای ساخت/حذف/آپدیت چند پنل |
 | `backend/` | آزمایش‌های قدیمی پایتون — برای دیپلوی Workers لازم نیست |
 
 ---

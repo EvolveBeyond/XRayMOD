@@ -10,7 +10,6 @@ import {
   Radar,
   Copy,
   Crosshair,
-  Smartphone,
   Sparkles,
 } from 'lucide-react';
 import { api, asList } from '@/lib/api';
@@ -19,7 +18,7 @@ import { PanelLink } from '@/components/panel-link';
 import { useI18n } from '@/lib/i18n';
 import { getPanelPrefix, secureSubUrl } from '@/lib/paths';
 import { toast } from 'sonner';
-import { BentoCell, DashboardBentoLayout } from '@/components/twa/dashboard-bento-layout';
+import { BentoCell, DashboardBentoLayout } from '@/components/layout/dashboard-bento-layout';
 
 interface SystemStatus {
   uptime: string;
@@ -120,11 +119,6 @@ export default function DashboardPage() {
                 <Crosshair size={14} /> Admin
               </Button>
             </PanelLink>
-            <a href="/twa/user?ref=owner_demo" target="_blank" rel="noreferrer">
-              <Button size="sm" variant="secondary">
-                <Smartphone size={14} /> Mini App
-              </Button>
-            </a>
             <Button size="sm" variant="secondary" onClick={buildRecommendedSub} disabled={recommendBusy}>
               <Sparkles size={14} />
               {recommendBusy ? '…' : 'ساب پیشنهادی'}
@@ -157,7 +151,7 @@ export default function DashboardPage() {
                 XrayMOD control plane
               </h2>
               <p className="text-sm text-[var(--text-muted)] max-w-md">
-                SECURE PATH · silent 404 · Admin Dashboard · Telegram Mini App
+                SECURE PATH · silent 404 · Admin Dashboard
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

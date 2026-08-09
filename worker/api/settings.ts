@@ -18,12 +18,10 @@ function json(data: unknown, status = 200): Response {
 
 const SETTING_PREFIXES = [
   'panel.%',
-  'financial.%',
   'integrations.%',
   'disguise.%',
   'ech.%',
   'tls_fragment.%',
-  'tg.%',
   'wizard.%',
   'protocol.%',
   'cleanip.%',

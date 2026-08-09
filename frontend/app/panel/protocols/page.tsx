@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { Shield, Plus, Trash2, Edit2, Copy, Eye, EyeOff, Check } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardHeader, Button, Input, StatusBadge, EmptyState } from '@/components';
-import { ProtocolTestDialog } from '@/components/twa/protocol-test-dialog';
-import { TwaI18nProvider } from '@/lib/twa/i18n';
+import { ProtocolTestDialog } from '@/components/protocol-test-dialog';
 
 interface Protocol {
   id: string;
@@ -91,9 +90,7 @@ export default function ProtocolsPage() {
         </div>
       </div>
 
-      <TwaI18nProvider>
-        <ProtocolTestDialog open={showTest} onClose={() => setShowTest(false)} />
-      </TwaI18nProvider>
+      <ProtocolTestDialog open={showTest} onClose={() => setShowTest(false)} />
 
       {/* Protocol Cards */}
       {loading ? (

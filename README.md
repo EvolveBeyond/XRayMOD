@@ -281,7 +281,6 @@ More detail: [DEPLOY.md](./DEPLOY.md).
 | `worker/` | **Production runtime** — routing, auth, sub, portal |
 | `frontend/` | Admin panel UI |
 | `installer/` + `install.*` | Bootstrap onto a Cloudflare account |
-| `telegram-bot/` | Optional multi-panel Telegram operator bot |
 | `docs/` | Human documentation and assets |
 | `backend/` | Legacy / optional Python experiments — **not** required for Workers deploy |
 
@@ -308,7 +307,6 @@ XRayMOD/
 │   └── router.ts           # Routing
 ├── frontend/               # Next.js admin UI
 ├── installer/              # Installer support code
-├── telegram-bot/           # Optional Telegram deploy bot
 ├── docs/                   # Documentation & assets
 ├── scripts/                # Smoke / e2e helpers
 ├── install.sh              # Unix installer

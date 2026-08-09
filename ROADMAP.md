@@ -32,11 +32,10 @@
 - [x] Automatic clean IP scanning + Iranian ISP detection
 
 ## Phase 4: External Server Bridge
-- [x] Telegram Bot integration (user notifications, management commands)
 - [x] Backend mode — VPS registration + auto-install script
-- [ ] TON Wallet integration (payments, withdrawals)
 - [x] Bridge API between Worker and external server
 - [ ] Real-time notifications via WebSocket
+- ~~Telegram Bot / Mini App / store / TON wallet~~ — removed from product
 
 ## Phase 5: WARP Integration
 - [ ] WARP account registration

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button, Input, PageHeader } from '@/components';
-import { BentoCell, DashboardBentoLayout } from '@/components/twa/dashboard-bento-layout';
+import { BentoCell, DashboardBentoLayout } from '@/components/layout/dashboard-bento-layout';
 import { toast } from 'sonner';
 import { getPanelPrefix, secureSubUrl } from '@/lib/paths';
 
@@ -559,54 +559,6 @@ export default function LabPage() {
             }
           >
             ذخیره وزن دامنه
-          </Button>
-        </BentoCell>
-
-        <BentoCell span={4}>
-          <p className="font-display font-semibold text-sm mb-3">ورود تلگرام</p>
-          <p className="text-[11px] text-[var(--text-muted)] mb-2 leading-relaxed">
-            یوزرنیم ربات لاگین و شناسه ادمین‌های مجاز را ذخیره کن. ویجت تلگرام روی صفحه ورود در فاز بعد
-            فعال می‌شود؛ تنظیمات از همین‌جا کنترل می‌شود.
-          </p>
-          <Input
-            className="mb-2"
-            placeholder="@YourLoginBot"
-            value={brand.tg_bot || ''}
-            onChange={(e: any) => setBrand({ ...brand, tg_bot: e.target.value })}
-          />
-          <Button
-            size="sm"
-            onClick={() =>
-              run('tg', async () => {
-                await api.put('/api/lab/telegram-login', {
-                  botUsername: brand.tg_bot || '',
-                  enabled: true,
-                });
-                toast.success('تنظیم ورود تلگرام ذخیره شد');
-              })
-            }
-          >
-            ذخیره Telegram Login
-          </Button>
-          <p className="text-[11px] text-[var(--text-muted)] mt-4 mb-2 leading-relaxed">
-            ربات هشدار (tg.bot_token + tg.chat_id در Settings): قطع Worker، کپ ماهانه، IP ضعیف، لاگین
-            مشکوک — همراه cron شبانه اجرا می‌شود.
-          </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() =>
-              run('alerts', async () => {
-                const r = await api.post('/api/commerce/alerts/run', {});
-                toast.success(
-                  r.sent?.length
-                    ? `هشدار ارسال شد: ${(r.sent as string[]).join(', ')}`
-                    : 'بررسی شد — هشدار جدیدی لازم نبود (یا توکن/چت تنظیم نشده)'
-                );
-              })
-            }
-          >
-            تست ربات هشدار
           </Button>
         </BentoCell>
 

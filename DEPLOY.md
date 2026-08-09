@@ -77,7 +77,6 @@ Most panel secrets live in **D1** (not CF env) after Gen 5.1.1.
 | `PAGES_URL` | Optional remote Pages origin (if not using ASSETS) |
 | `PANEL_RECOVERY` | `true` disables disguise (break-glass) |
 | `DISGUISE_PAGE` | Default `404` (also `1101`, `nginx`, …) |
-| `ENABLE_TELEGRAM` | Telegram bot feature flag |
 | `CRYPTO_KEY` | Override default crypto key (set in production) |
 
 ## Admin Dashboard

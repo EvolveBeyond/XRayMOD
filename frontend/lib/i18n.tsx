@@ -114,7 +114,7 @@ const dict = {
     ipv6: 'IPv6',
     advanced: 'پیشرفته',
     walletSoon: 'به‌زودی',
-    walletDesc: 'کیف پول TON و پرداخت‌ها در نسخه‌های بعدی',
+    walletDesc: 'ماژول مالی در این نسخه در دسترس نیست',
   },
   en: {
     appName: 'XrayMOD',
@@ -217,7 +217,7 @@ const dict = {
     ipv6: 'IPv6',
     advanced: 'Advanced',
     walletSoon: 'Coming soon',
-    walletDesc: 'TON wallet & payments in a later release',
+    walletDesc: 'Financial module is not available in this build',
   },
 } as const;
 

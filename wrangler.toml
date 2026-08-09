@@ -19,12 +19,9 @@ database_id = "00000000-0000-0000-0000-000000000000"
 preview_database_id = "00000000-0000-0000-0000-000000000000"
 
 [vars]
-ENABLE_TELEGRAM = "false"
-ENABLE_TON_WALLET = "false"
 EXTERNAL_SERVER_URL = ""
 DISGUISE_PAGE = "404"
 PANEL_RECOVERY = "false"
-TG_BOT_TOKEN = ""
 CRYPTO_KEY = ""
 
 # Nightly edge ops: Auto Clean-IP + health-check
