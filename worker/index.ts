@@ -1,6 +1,7 @@
 import type { Env } from './types';
 import { handleRequest } from './router';
 import { runScheduledEdgeOps } from './lib/edge-ops';
+import { runAlertChecks } from './lib/alerts';
 import { ensureSchema } from './schema';
 
 export default {
@@ -32,6 +33,7 @@ export default {
         try {
           await ensureSchema(env.DB);
           await runScheduledEdgeOps(env.DB);
+          await runAlertChecks(env);
         } catch (e) {
           console.error('scheduled edge ops failed', e);
         }

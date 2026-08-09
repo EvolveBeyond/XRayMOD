@@ -18,6 +18,7 @@ import {
   MOCK_SERVERS,
   MOCK_TX,
 } from './mock';
+import { fetchManager } from './commerce';
 
 type Mode = 'user' | 'admin';
 
@@ -33,6 +34,7 @@ type ManagerContextValue = {
   servers: ServerNode[];
   transactions: Transaction[];
   inviteUrl: string;
+  refCode: string | null;
   refreshFromUrl: () => void;
 };
 
@@ -45,20 +47,24 @@ function parseManagerId(): string | null {
   const fromQuery = qs.get('ref') || qs.get('managerId') || qs.get('startapp');
   if (fromQuery) return fromQuery.trim();
 
-  // Telegram Mini App start_param / startapp
   try {
-    const tg = (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: string } } } })
-      .Telegram?.WebApp?.initDataUnsafe?.start_param;
+    const tg = (
+      window as unknown as {
+        Telegram?: { WebApp?: { initDataUnsafe?: { start_param?: string } } };
+      }
+    ).Telegram?.WebApp?.initDataUnsafe?.start_param;
     if (tg) return String(tg).trim();
   } catch {
     /* ignore */
   }
 
-  // Hash deep link: #ref=owner_demo
   const hash = window.location.hash.replace(/^#/, '');
   if (hash.startsWith('ref=')) return hash.slice(4).trim();
 
-  // Dev convenience: allow demo without query when on /twa paths
+  // Persist last successful ref for return visits
+  const saved = sessionStorage.getItem('twa.ref');
+  if (saved) return saved;
+
   if (process.env.NODE_ENV === 'development' && window.location.pathname.includes('/twa')) {
     return 'owner_demo';
   }
@@ -82,30 +88,59 @@ function expandTelegram() {
 
 export function ManagerProvider({ children }: { children: ReactNode }) {
   const [managerId, setManagerId] = useState<string | null>(null);
+  const [manager, setManager] = useState<Manager | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<'missing' | 'invalid' | null>(null);
   const [mode, setMode] = useState<Mode>('user');
 
   const refreshFromUrl = useCallback(() => {
-    setLoading(true);
     const id = parseManagerId();
     setManagerId(id);
     if (!id) {
+      setManager(null);
       setError('missing');
-    } else if (!MOCK_MANAGERS[id]) {
-      setError('invalid');
-    } else {
-      setError(null);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    setLoading(true);
+    void (async () => {
+      try {
+        const res = await fetchManager(id);
+        if (res.ok && res.manager) {
+          const m: Manager = {
+            id: res.manager.id,
+            role: res.manager.role,
+            name: res.manager.name,
+            welcomeText: res.manager.welcome,
+            invitePath: res.invitePath || `?ref=${res.manager.id}`,
+            sponsorProfitPct: res.manager.commissionPct,
+          };
+          setManager(m);
+          setError(null);
+          sessionStorage.setItem('twa.ref', id);
+          return;
+        }
+      } catch {
+        /* fall through to mock */
+      }
+
+      const mock = MOCK_MANAGERS[id];
+      if (mock) {
+        setManager(mock);
+        setError(null);
+        sessionStorage.setItem('twa.ref', id);
+      } else {
+        setManager(null);
+        setError('invalid');
+      }
+    })().finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     expandTelegram();
     refreshFromUrl();
   }, [refreshFromUrl]);
-
-  const manager = managerId ? MOCK_MANAGERS[managerId] || null : null;
 
   const scoped = useMemo(() => {
     if (!managerId) {
@@ -122,7 +157,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
   const inviteUrl = useMemo(() => {
     if (typeof window === 'undefined' || !manager) return '';
     const base = `${window.location.origin}${window.location.pathname.split('/twa')[0]}/twa/user`;
-    return `${base}${manager.invitePath}`;
+    return `${base}${manager.invitePath.startsWith('?') ? manager.invitePath : `?ref=${manager.id}`}`;
   }, [manager]);
 
   const value = useMemo<ManagerContextValue>(
@@ -135,6 +170,7 @@ export function ManagerProvider({ children }: { children: ReactNode }) {
       setMode,
       ...scoped,
       inviteUrl,
+      refCode: managerId,
       refreshFromUrl,
     }),
     [managerId, manager, isLoading, error, mode, scoped, inviteUrl, refreshFromUrl]

@@ -19,6 +19,7 @@ import { handleWizard } from './api/wizard';
 import { handleTools } from './api/tools';
 import { handleAdmin } from './api/admin';
 import { handleLab } from './api/lab';
+import { handleCommerce } from './api/commerce';
 import { handleSubscription } from './subscription';
 import { handleUserPortal } from './user-portal';
 import { handleProxyTraffic } from './proxy';
@@ -66,6 +67,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/tools(?:\/([^/]+))?$/, handler: handleTools, params: ['action'] },
   { pattern: /^\/api\/admin(?:\/([^/]+))?$/, handler: handleAdmin, params: ['action'] },
   { pattern: /^\/api\/lab(?:\/([^/]+))?$/, handler: handleLab, params: ['action'] },
+  { pattern: /^\/api\/commerce(?:\/(.+))?$/, handler: handleCommerce, params: ['action'] },
   { pattern: /^\/sub\/([^/]+)$/, handler: handleSubscription, params: ['token'] },
   { pattern: /^\/me\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
   { pattern: /^\/status\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
@@ -170,7 +172,7 @@ export async function handleRequest(
         headers: {
           'Access-Control-Allow-Origin': allow,
           'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Buyer-Key, X-Ref',
           'Access-Control-Allow-Credentials': 'true',
           'Access-Control-Max-Age': '86400',
           Vary: 'Origin',

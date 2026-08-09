@@ -588,6 +588,26 @@ export default function LabPage() {
           >
             ذخیره Telegram Login
           </Button>
+          <p className="text-[11px] text-[var(--text-muted)] mt-4 mb-2 leading-relaxed">
+            ربات هشدار (tg.bot_token + tg.chat_id در Settings): قطع Worker، کپ ماهانه، IP ضعیف، لاگین
+            مشکوک — همراه cron شبانه اجرا می‌شود.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              run('alerts', async () => {
+                const r = await api.post('/api/commerce/alerts/run', {});
+                toast.success(
+                  r.sent?.length
+                    ? `هشدار ارسال شد: ${(r.sent as string[]).join(', ')}`
+                    : 'بررسی شد — هشدار جدیدی لازم نبود (یا توکن/چت تنظیم نشده)'
+                );
+              })
+            }
+          >
+            تست ربات هشدار
+          </Button>
         </BentoCell>
 
         {/* Ops */}
