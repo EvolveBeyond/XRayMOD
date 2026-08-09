@@ -95,7 +95,13 @@ export async function handleLogin(
     const enforce = enforceRow?.v !== 'false' && !!cfEmail;
     if (enforce && username.trim().toLowerCase() !== cfEmail) {
       await recordLoginAttempt(env.DB, clientIP);
-      return json({ success: false, message: 'Invalid credentials' }, 401);
+      return json(
+        {
+          success: false,
+          message: 'برای ورود باید همان ایمیل Cloudflare ذخیره‌شده در پنل را بزنید',
+        },
+        401
+      );
     }
 
     const user = await env.DB.prepare(
@@ -116,6 +122,7 @@ export async function handleLogin(
     }
 
     let valid = await verifyPassword(password, user.password_hash);
+    let needsHashSync = false;
 
     // Fallback: panel.password_hash (install path)
     if (!valid && user.role === 'admin') {
@@ -124,20 +131,44 @@ export async function handleLogin(
       ).bind('panel.password_hash').first<{ v: string }>();
       if (panelHash?.v) {
         valid = await verifyPassword(password, panelHash.v);
-        // Upgrade admin hash if panel hash matched but user hash is stale
-        if (valid && panelHash.v !== user.password_hash) {
-          // re-hash with new scheme if needed happens on next password change
+        if (valid && panelHash.v !== user.password_hash) needsHashSync = true;
+      }
+    }
+
+    // Fallback: install credentials_json plaintext (recovery after deploy/hash drift)
+    if (!valid && user.role === 'admin') {
+      const credRow = await env.DB.prepare(
+        'SELECT v FROM kvstore WHERE k = ?'
+      ).bind('panel.credentials_json').first<{ v: string }>();
+      if (credRow?.v) {
+        try {
+          const cred = JSON.parse(credRow.v) as { username?: string; password?: string };
+          const cu = String(cred.username || 'admin').trim().toLowerCase();
+          const cp = String(cred.password || '');
+          if (
+            cp &&
+            username.trim().toLowerCase() === cu &&
+            password === cp
+          ) {
+            valid = true;
+            needsHashSync = true;
+          }
+        } catch {
+          /* ignore */
         }
       }
     }
 
     if (!valid) {
       await recordLoginAttempt(env.DB, clientIP);
-      return json({ success: false, message: 'Invalid credentials' }, 401);
+      return json(
+        { success: false, message: 'نام کاربری یا رمز عبور اشتباه است' },
+        401
+      );
     }
 
-    // Transparent upgrade: legacy SHA-256 → PBKDF2 on successful login
-    if (!user.password_hash.startsWith('pbkdf2$')) {
+    // Transparent upgrade / resync hashes after recovery fallbacks
+    if (!user.password_hash.startsWith('pbkdf2$') || needsHashSync) {
       const { hashPassword } = await import('../auth');
       const upgraded = await hashPassword(password);
       await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
