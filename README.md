@@ -60,12 +60,19 @@ You get a practical admin UI, a user-facing status page, smart subscription bund
 |:--:|:--------|:-------|
 | 🥷 | **Compulsory SECURE PATH** | Panel / API / sub / portal only under a random UUID |
 | 🛡 | **Admin dashboard** | Users · update check · CF-email login · custom domains · kill switch |
-| 📊 | **User status portal** | Traffic, days left, QR — no admin login for end users |
-| 🎯 | **Smart subscription** | Direct + clean IPs + CF ports · Clash / sing-box formats |
-| 🥷 | **Stealth skins** | Silent 404 · CF 1101 · nginx · GitHub · WordPress · Access Denied |
-| 🕳 | **Canary traps** | Fake paths log scanners without exposing the panel |
-| 💾 | **Backup & audit** | Export/import · remote settings sync · admin action history |
-| 📡 | **ISP-aware clean IPs** | Better picks for constrained carriers when data is available |
+| 🧪 | **Advanced Lab UI** | Speed ops · smart sub · whitelabel · stealth · ops in one screen |
+| 🌙 | **Nightly Auto Clean-IP** | Cron refreshes Top-N country IPs per ISP (MTN/MCI/…) |
+| ❤️ | **Edge health-check** | Dead clean IPs probed and removed from the subscription |
+| 🎮 | **Speed profiles** | Gaming / YouTube / Stable — ports, fingerprints, country pools |
+| 🎟 | **Guest sub (24h) + QR** | Temporary share links that expire automatically |
+| 🇮🇷 | **Split routing** | Iran → DIRECT for Clash Meta / sing-box |
+| 🔁 | **Failover tags** | `[P1]` Direct → `[P2]` 🇩🇪 Germany … for client priority |
+| 🎨 | **Whitelabel** | Brand name, colors, domain, sub banner for resellers |
+| 🕳 | **Pro canary** | Scanner hits with ASN/IP · one-click block list |
+| 🧩 | **Fragment / Reality presets** | One-click anti-filter client hints |
+| 💾 | **Backup / Restore + rollback** | Single JSON backup · Worker version rollback |
+| 🕸 | **Weighted domains + multi-node** | Rotate custom domains · register multiple Workers |
+| 📡 | **Flagged clean IPs** | Country emoji on each subscription config name |
 | 🔐 | **Admin hardening** | CF email login · 2FA · rate limiting · SECURE PATH |
 | ⚡ | **One-line install** | Windows PowerShell/CMD · Linux · macOS · WSL |
 | 📱 | **Client-ready** | v2rayNG ≥2.2.3 · sing-box ≥1.12 · Hiddify · Streisand · Clash |

@@ -134,8 +134,28 @@ export function buildRecommendedLinks(args: {
   cleanIPs?: string[];
   max?: number;
   carrier?: string;
+  /** Filter / prefer countries + ports for speed profiles */
+  preferCountries?: string[];
+  preferPorts?: number[];
+  preferFingerprints?: string[];
+  /** Prefix names with [P1]/[P2] failover priority */
+  failover?: boolean;
 }): string[] {
-  const { uuid, workerHost, path, name, cleanIPs = [], max = 10, carrier } = args;
+  const {
+    uuid,
+    workerHost,
+    path,
+    name,
+    cleanIPs = [],
+    max = 10,
+    carrier,
+    preferCountries,
+    preferPorts,
+    preferFingerprints,
+    failover = true,
+  } = args;
+  const fps = preferFingerprints?.length ? preferFingerprints : [...FINGERPRINTS];
+  const ports = preferPorts?.length ? preferPorts : [...CF_EDGE_PORTS];
   const links: string[] = [];
   const seen = new Set<string>();
 
@@ -146,18 +166,23 @@ export function buildRecommendedLinks(args: {
     links.push(link);
   };
 
-  const label = (part: string) => `${name} · ${part}`;
+  let prio = 0;
+  const label = (part: string) => {
+    prio += 1;
+    const tag = failover ? `[P${Math.min(prio, 9)}] ` : '';
+    return `${tag}${name} · ${part}`;
+  };
 
-  // 1. Primary direct (most reliable)
+  // 1. Primary direct (most reliable) — P1 failover head
   push(
     buildVlessWsLink({
       uuid,
       host: workerHost,
-      port: 443,
+      port: ports.includes(443) ? 443 : ports[0] || 443,
       path,
       name: label(`${countryFlag('CF')} Direct`),
       sni: workerHost,
-      fingerprint: 'chrome',
+      fingerprint: fps[0] || 'chrome',
     })
   );
 
@@ -174,8 +199,18 @@ export function buildRecommendedLinks(args: {
     const country = (tag || '').trim().toUpperCase() || 'CF';
     entries.push({ ip: clean, port: Number(portStr) || 443, country });
   }
-  // Preferred countries first
-  const prefer = ['DE', 'NL', 'FI', 'SE', 'TR', 'GB', 'FR'];
+  // Preferred countries first (profile-aware)
+  const prefer = preferCountries?.length
+    ? preferCountries
+    : ['DE', 'NL', 'FI', 'SE', 'TR', 'GB', 'FR'];
+  if (preferCountries?.length) {
+    // drop countries outside profile when we have enough tagged entries
+    const filtered = entries.filter((e) => prefer.includes(e.country) || e.country === 'CF');
+    if (filtered.length >= 3) {
+      entries.length = 0;
+      entries.push(...filtered);
+    }
+  }
   entries.sort((a, b) => {
     const ai = prefer.indexOf(a.country);
     const bi = prefer.indexOf(b.country);
@@ -186,15 +221,16 @@ export function buildRecommendedLinks(args: {
   for (const e of entries) {
     if (links.length >= max) break;
     i++;
-    const fp = FINGERPRINTS[i % FINGERPRINTS.length];
+    const fp = fps[i % fps.length] || 'chrome';
     const isp = carrier && carrier !== 'all' ? ` · ${carrier.toUpperCase()}` : '';
-    // e.g. "🇩🇪 Germany · 188.114.96.12 · MTN"
+    // e.g. "[P2] 🇩🇪 Germany · 188.114.96.12 · MTN"
     const tag = `${countryLabel(e.country)} · ${e.ip}${isp}`;
+    const port = ports.includes(e.port) ? e.port : ports[0] || 443;
     push(
       buildVlessWsLink({
         uuid,
         host: e.ip,
-        port: e.port || 443,
+        port,
         path,
         name: label(tag),
         sni: workerHost,
@@ -206,8 +242,8 @@ export function buildRecommendedLinks(args: {
   const ips = entries.map((e) => e.ip);
   const countryByIp = new Map(entries.map((e) => [e.ip, e.country]));
 
-  // 3. CF alternate ports on worker host
-  for (const port of CF_EDGE_PORTS) {
+  // 3. CF alternate ports on worker host (profile ports)
+  for (const port of ports) {
     if (links.length >= max) break;
     if (port === 443) continue;
     push(
@@ -218,7 +254,7 @@ export function buildRecommendedLinks(args: {
         path,
         name: label(`${countryFlag('CF')} Port ${port}`),
         sni: workerHost,
-        fingerprint: 'chrome',
+        fingerprint: fps[0] || 'chrome',
       })
     );
   }
@@ -226,14 +262,14 @@ export function buildRecommendedLinks(args: {
   // 4. Fingerprint variants on clean IP #1 or worker
   const host2 = ips[0] || workerHost;
   const host2Cc = countryByIp.get(host2) || 'CF';
-  for (const fp of FINGERPRINTS) {
+  for (const fp of fps) {
     if (links.length >= max) break;
-    if (fp === 'chrome' && host2 === workerHost) continue;
+    if (fp === (fps[0] || 'chrome') && host2 === workerHost) continue;
     push(
       buildVlessWsLink({
         uuid,
         host: host2,
-        port: 443,
+        port: ports[0] || 443,
         path,
         name: label(`${countryLabel(host2Cc)} · FP ${fp}`),
         sni: workerHost,

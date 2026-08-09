@@ -26,3 +26,7 @@ DISGUISE_PAGE = "404"
 PANEL_RECOVERY = "false"
 TG_BOT_TOKEN = ""
 CRYPTO_KEY = ""
+
+# Nightly edge ops: Auto Clean-IP + health-check
+[triggers]
+crons = ["15 1 * * *"]

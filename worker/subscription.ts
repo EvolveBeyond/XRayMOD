@@ -10,6 +10,7 @@ import {
 } from './lib/links';
 import { renderUserPortal } from './user-portal';
 import { getSecureBase, getCustomDomains } from './lib/secure-path';
+import { SPEED_PROFILES, type SpeedProfile, profileMeta } from './lib/edge-ops';
 
 function text(content: string, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(content, {
@@ -94,13 +95,14 @@ async function ensureConfig(
   };
 }
 
-/** Collect up to 10 best links for a user */
+/** Collect best links for a user (profile + failover aware) */
 async function buildUserLinks(
   request: Request,
   env: Env,
   user: any,
-  workerHost: string
-): Promise<{ links: string[]; carrier: string }> {
+  workerHost: string,
+  profileName?: string
+): Promise<{ links: string[]; carrier: string; profile: SpeedProfile }> {
   const cfg = await ensureConfig(env, user, workerHost);
   const ispAware =
     (
@@ -111,6 +113,20 @@ async function buildUserLinks(
   const carrier = ispAware ? detectIranianISP(request) : 'all';
   const cleanIPs = await getCleanIPs(env.DB, carrier === 'all' ? undefined : carrier);
 
+  const storedProfile = (
+    await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.speed_profile')
+      .first<{ v: string }>()
+  )?.v as SpeedProfile | undefined;
+  const profile = (
+    profileName && SPEED_PROFILES[profileName as SpeedProfile]
+      ? profileName
+      : storedProfile && SPEED_PROFILES[storedProfile]
+        ? storedProfile
+        : 'stable'
+  ) as SpeedProfile;
+  const meta = profileMeta(profile);
+
   const mixed =
     (
       await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
@@ -118,15 +134,36 @@ async function buildUserLinks(
         .first<{ v: string }>()
     )?.v === 'true';
 
-  // Primary: top-10 VLESS recommended set from main path
+  // Weighted custom domains expand pool
+  let domainPool = await getCustomDomains(env.DB);
+  try {
+    const w = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.custom_domains_weighted')
+      .first<{ v: string }>();
+    if (w?.v) {
+      const list = JSON.parse(w.v) as { host: string; weight: number }[];
+      const expanded: string[] = [];
+      for (const d of list) {
+        for (let i = 0; i < Math.min(d.weight || 1, 5); i++) expanded.push(d.host);
+      }
+      if (expanded.length) domainPool = expanded;
+    }
+  } catch {
+    /* ignore */
+  }
+
   let links = buildRecommendedLinks({
     uuid: user.uuid,
     workerHost,
     path: cfg.path,
-    name: cfg.name,
+    name: `${cfg.name} · ${meta.label}`,
     cleanIPs,
-    max: 18,
+    max: meta.maxIps + 6,
     carrier,
+    preferCountries: meta.countries,
+    preferPorts: meta.ports,
+    preferFingerprints: meta.fps,
+    failover: true,
   });
 
   // Optional mixed: swap a few slots with trojan/ss style from other configs
@@ -159,16 +196,18 @@ async function buildUserLinks(
 
   const unique = [...new Set(links.filter(Boolean))].slice(0, 16);
 
-  // Custom domains → extra D-tagged configs (BPB-style)
-  const domains = await getCustomDomains(env.DB);
+  // Custom / weighted domains → extra D-tagged configs
   const domainLinks: string[] = [];
-  for (const domain of domains) {
+  const seenDom = new Set<string>();
+  for (const domain of domainPool) {
+    if (seenDom.has(domain)) continue;
+    seenDom.add(domain);
     domainLinks.push(
       buildVlessWsLink({
         uuid: user.uuid,
         host: domain,
         path: cfg.path,
-        name: `${countryFlag('CF')} ${cfg.name} · D · ${domain}`,
+        name: `[P${Math.min(domainLinks.length + 2, 9)}] ${countryFlag('CF')} ${cfg.name} · D · ${domain}`,
         sni: domain,
       })
     );
@@ -177,6 +216,7 @@ async function buildUserLinks(
   return {
     links: [...unique, ...domainLinks].slice(0, 20),
     carrier,
+    profile,
   };
 }
 
@@ -202,6 +242,12 @@ export async function handleSubscription(
   const origin = url.origin;
   const base = await getSecureBase(env.DB, origin);
   const format = (url.searchParams.get('format') || 'base64').toLowerCase();
+  const profileParam = url.searchParams.get('profile') || undefined;
+  const split =
+    url.searchParams.get('split') === '1' ||
+    url.searchParams.get('split') === 'true' ||
+    format === 'clash-meta' ||
+    format === 'singbox-split';
 
   if (format === 'status' || format === 'me' || format === 'portal') {
     return Response.redirect(`${base}/me/${user.uuid}`, 302);
@@ -212,8 +258,20 @@ export async function handleSubscription(
     return text('Subscription expired — open status portal for details', 403);
   }
 
-  const { links, carrier } = await buildUserLinks(request, env, user, workerHost);
-  const title = `Panel · ${user.username}`;
+  const { links, carrier, profile } = await buildUserLinks(
+    request,
+    env,
+    user,
+    workerHost,
+    profileParam
+  );
+  const brandName =
+    (
+      await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+        .bind('panel.sub_name')
+        .first<{ v: string }>()
+    )?.v || 'XRayMOD';
+  const title = `${brandName} · ${user.username} · ${profile}`;
   const headers = subHeaders(user, title, `${base}/me/${user.uuid}`);
 
   if (format === 'html' || format === 'page') {
@@ -231,18 +289,30 @@ export async function handleSubscription(
     return text(links.join('\n'), 200, headers);
   }
 
-  if (format === 'clash') {
-    return text(buildClashYaml(links, workerHost, user), 200, {
-      ...headers,
-      'Content-Type': 'text/yaml; charset=utf-8',
-    });
+  if (format === 'clash' || format === 'clash-meta') {
+    return text(
+      buildClashYaml(links, workerHost, user, {
+        splitIran: split || format.includes('meta'),
+      }),
+      200,
+      {
+        ...headers,
+        'Content-Type': 'text/yaml; charset=utf-8',
+      }
+    );
   }
 
-  if (format === 'singbox' || format === 'sing-box') {
-    return text(buildSingboxJson(links, workerHost, user), 200, {
-      ...headers,
-      'Content-Type': 'application/json; charset=utf-8',
-    });
+  if (format === 'singbox' || format === 'sing-box' || format === 'singbox-split') {
+    return text(
+      buildSingboxJson(links, workerHost, user, {
+        splitIran: split || format.includes('split'),
+      }),
+      200,
+      {
+        ...headers,
+        'Content-Type': 'application/json; charset=utf-8',
+      }
+    );
   }
 
   // default base64 for v2rayNG / Hiddify / Streisand
@@ -255,7 +325,12 @@ export async function handleSubscription(
   });
 }
 
-function buildClashYaml(links: string[], host: string, user: any): string {
+function buildClashYaml(
+  links: string[],
+  host: string,
+  user: any,
+  opts?: { splitIran?: boolean }
+): string {
   const proxies: string[] = [];
   const names: string[] = [];
   links.forEach((link, i) => {
@@ -288,6 +363,17 @@ function buildClashYaml(links: string[], host: string, user: any): string {
     }
   });
 
+  const splitRules = opts?.splitIran
+    ? `rules:
+  - GEOIP,IR,DIRECT
+  - DOMAIN-SUFFIX,ir,DIRECT
+  - DOMAIN-SUFFIX,iran,DIRECT
+  - MATCH,PROXY
+`
+    : `rules:
+  - MATCH,PROXY
+`;
+
   return `mixed-port: 7890
 allow-lan: false
 mode: rule
@@ -298,20 +384,25 @@ proxy-groups:
   - name: PROXY
     type: select
     proxies:
+      - Auto
 ${names.map((n) => `      - "${n.replace(/"/g, '')}"`).join('\n')}
       - DIRECT
   - name: Auto
     type: url-test
     url: http://www.gstatic.com/generate_204
-    interval: 300
+    interval: 180
+    tolerance: 50
     proxies:
 ${names.map((n) => `      - "${n.replace(/"/g, '')}"`).join('\n')}
-rules:
-  - MATCH,PROXY
-`;
+${splitRules}`;
 }
 
-function buildSingboxJson(links: string[], host: string, user: any): string {
+function buildSingboxJson(
+  links: string[],
+  host: string,
+  user: any,
+  opts?: { splitIran?: boolean }
+): string {
   const outbounds: any[] = [];
   const tags: string[] = [];
   links.forEach((link, i) => {
@@ -342,21 +433,42 @@ function buildSingboxJson(links: string[], host: string, user: any): string {
     }
   });
 
+  const route = opts?.splitIran
+    ? {
+        rules: [
+          { geoip: ['ir'], outbound: 'direct' },
+          { domain_suffix: ['.ir'], outbound: 'direct' },
+        ],
+        final: 'proxy',
+        auto_detect_interface: true,
+      }
+    : { final: 'proxy', auto_detect_interface: true };
+
   return JSON.stringify(
     {
       log: { level: 'warn' },
+      dns: {
+        servers: [
+          { tag: 'local', address: 'local', detour: 'direct' },
+          { tag: 'proxy-dns', address: '1.1.1.1', detour: 'proxy' },
+        ],
+        rules: opts?.splitIran ? [{ domain_suffix: ['.ir'], server: 'local' }] : [],
+      },
       outbounds: [
         ...outbounds,
-        { type: 'selector', tag: 'proxy', outbounds: tags.length ? tags : ['direct'] },
+        { type: 'selector', tag: 'proxy', outbounds: ['auto', ...tags, 'direct'] },
         {
           type: 'urltest',
           tag: 'auto',
           outbounds: tags,
           url: 'https://www.gstatic.com/generate_204',
-          interval: '5m',
+          interval: '3m',
+          tolerance: 50,
         },
         { type: 'direct', tag: 'direct' },
+        { type: 'block', tag: 'block' },
       ],
+      route,
     },
     null,
     2

@@ -17,6 +17,7 @@ import {
   LifeBuoy,
   Ghost,
   ShieldCheck,
+  FlaskConical,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { goPanel, getPanelPrefix } from '@/lib/paths';
@@ -30,6 +31,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: 'overview',
     items: [
       { href: '/panel', key: 'dashboard', icon: LayoutDashboard },
+      { href: '/panel/lab', key: 'lab', icon: FlaskConical },
       { href: '/panel/admin', key: 'admin', icon: ShieldCheck },
       { href: '/panel/users', key: 'users', icon: Users },
     ],

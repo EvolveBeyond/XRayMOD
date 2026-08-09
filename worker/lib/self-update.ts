@@ -437,3 +437,30 @@ export async function saveCfToken(
   if (workerName) await kvSet(db, 'panel.worker_name', workerName.trim());
   if (d1Id) await kvSet(db, 'panel.d1_id', d1Id.trim());
 }
+
+export async function listWorkerVersions(
+  token: string,
+  accountId: string,
+  script: string
+): Promise<{ id: string; number?: number; created?: string }[]> {
+  const data = await cf(token, 'GET', `/accounts/${accountId}/workers/scripts/${script}/versions`);
+  const items = Array.isArray(data.result)
+    ? data.result
+    : data.result?.items || [];
+  return (items as any[]).slice(0, 12).map((v) => ({
+    id: v.id || v.version_id,
+    number: v.number,
+    created: v.metadata?.created_on || v.created_on,
+  }));
+}
+
+export async function rollbackWorkerVersion(
+  token: string,
+  accountId: string,
+  script: string,
+  versionId: string
+): Promise<void> {
+  await cf(token, 'POST', `/accounts/${accountId}/workers/scripts/${script}/deployments`, {
+    versions: [{ version_id: versionId, percentage: 100 }],
+  });
+}

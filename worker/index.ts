@@ -1,5 +1,7 @@
 import type { Env } from './types';
 import { handleRequest } from './router';
+import { runScheduledEdgeOps } from './lib/edge-ops';
+import { ensureSchema } from './schema';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -21,5 +23,19 @@ export default {
         }
       );
     }
+  },
+
+  /** Nightly Auto Clean-IP + health-check (UTC 01:15) */
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          await ensureSchema(env.DB);
+          await runScheduledEdgeOps(env.DB);
+        } catch (e) {
+          console.error('scheduled edge ops failed', e);
+        }
+      })()
+    );
   },
 };

@@ -269,6 +269,17 @@ const DEFAULT_SETTINGS = {
   'panel.monthly_cap_gb': '0',
   'panel.sub_html_enhanced': 'true',
   'panel.isp_aware_sub': 'true',
+  'cleanip.auto_enabled': 'true',
+  'cleanip.health_enabled': 'true',
+  'panel.speed_profile': 'stable',
+  'panel.sub_name': 'XRayMOD',
+  'panel.sub_banner': 'Secure edge · Clean IP · Smart sub',
+  'panel.tg_login_enabled': 'false',
+  'canary.blocked_ips': '[]',
+  'canary.report': '{"hits":[],"blocked":[]}',
+  'brand.config': '',
+  'panel.nodes_json': '[]',
+  'panel.custom_domains_weighted': '[]',
 };
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {

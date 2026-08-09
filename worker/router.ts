@@ -18,6 +18,7 @@ import { handleBackends } from './api/backends';
 import { handleWizard } from './api/wizard';
 import { handleTools } from './api/tools';
 import { handleAdmin } from './api/admin';
+import { handleLab } from './api/lab';
 import { handleSubscription } from './subscription';
 import { handleUserPortal } from './user-portal';
 import { handleProxyTraffic } from './proxy';
@@ -64,6 +65,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/wizard(?:\/([^/]+))?$/, handler: handleWizard, params: ['action'] },
   { pattern: /^\/api\/tools(?:\/([^/]+))?$/, handler: handleTools, params: ['action'] },
   { pattern: /^\/api\/admin(?:\/([^/]+))?$/, handler: handleAdmin, params: ['action'] },
+  { pattern: /^\/api\/lab(?:\/([^/]+))?$/, handler: handleLab, params: ['action'] },
   { pattern: /^\/sub\/([^/]+)$/, handler: handleSubscription, params: ['token'] },
   { pattern: /^\/me\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
   { pattern: /^\/status\/([^/]+)$/, handler: handleUserPortal, params: ['token'] },
@@ -194,16 +196,70 @@ export async function handleRequest(
 
     // Canary traps (before secure-path — scanners probe public paths)
     try {
+      const ip = clientIp(request);
+      const blockedRaw = await env.DB.prepare(
+        'SELECT v FROM kvstore WHERE k = ?'
+      )
+        .bind('canary.blocked_ips')
+        .first<{ v: string }>();
+      if (blockedRaw?.v) {
+        try {
+          const blocked = JSON.parse(blockedRaw.v) as string[];
+          if (Array.isArray(blocked) && blocked.includes(ip)) {
+            return silent404();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
       const canaries = await getCanaryPaths(env.DB);
       const hit = matchCanary(pathname, canaries);
       if (hit) {
+        const asn = String((request as any).cf?.asn || '');
+        const country = String((request as any).cf?.country || '');
         await appendAudit(
           env.DB,
           'canary_hit',
-          `path=${pathname} bait=${hit}`,
-          clientIp(request),
+          `path=${pathname} bait=${hit} asn=${asn} country=${country}`,
+          ip,
           'scanner'
         );
+        // Professional canary report for Lab UI
+        try {
+          const row = await env.DB.prepare(
+            'SELECT v FROM kvstore WHERE k = ?'
+          )
+            .bind('canary.report')
+            .first<{ v: string }>();
+          let report: { hits: any[]; blocked: string[] } = { hits: [], blocked: [] };
+          if (row?.v) {
+            try {
+              report = JSON.parse(row.v);
+            } catch {
+              /* ignore */
+            }
+          }
+          report.hits = [
+            {
+              at: Date.now(),
+              ip,
+              path: pathname,
+              bait: hit,
+              asn,
+              country,
+              ua: (request.headers.get('user-agent') || '').slice(0, 120),
+            },
+            ...(report.hits || []),
+          ].slice(0, 100);
+          await env.DB.prepare(
+            'INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)'
+          )
+            .bind('canary.report', JSON.stringify(report), Date.now())
+            .run();
+        } catch {
+          /* ignore */
+        }
         return denyPublic(env, url.host);
       }
     } catch {

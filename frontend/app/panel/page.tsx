@@ -129,6 +129,11 @@ export default function DashboardPage() {
               <Sparkles size={14} />
               {recommendBusy ? '…' : 'ساب پیشنهادی'}
             </Button>
+            <PanelLink href="/panel/lab">
+              <Button size="sm" variant="secondary">
+                Lab
+              </Button>
+            </PanelLink>
             <PanelLink href="/panel/cleanip">
               <Button size="sm">
                 <Radar size={14} /> {t('scanClean')}
