@@ -89,6 +89,24 @@ export async function generateRandomIPs(
   count: number = 16,
   port: number = -1
 ): Promise<string[]> {
+  // Prefer country-weighted pool (DE/NL/FI/TR/…) for better Iran latency
+  try {
+    const { generateCountryCleanIPs } = await import('./lib/cleanip-pool');
+    const labeled = await generateCountryCleanIPs({
+      count,
+      port: port === -1 ? 443 : port,
+    });
+    if (labeled.length) {
+      return labeled.map((x) =>
+        port === -1
+          ? `${x.ip}:${CF_PORTS[Math.floor(Math.random() * CF_PORTS.length)]}`
+          : `${x.ip}:${x.port}`
+      );
+    }
+  } catch {
+    /* fall through */
+  }
+
   const carrier = detectIranianISP(request);
   const cidrList = await fetchCIDRList(carrier);
 
@@ -123,7 +141,7 @@ export async function getCleanIPs(db: D1Database, carrier?: string): Promise<str
 }
 
 export async function setCleanIPs(db: D1Database, ips: string[], carrier?: string): Promise<void> {
-  const unique = [...new Set(ips)].slice(0, 30);
+  const unique = [...new Set(ips)].slice(0, 80);
   const key =
     carrier && carrier !== 'all' && carrier !== 'unknown'
       ? `cleanip.ips.${carrier}`

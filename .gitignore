@@ -12,6 +12,8 @@ frontend/.next/
 frontend/tsconfig.tsbuildinfo
 .wrangler/
 .wrangler-dist/
+.wrangler-deploy.*.toml
+.rolling/
 dist-worker/
 worker.js
 *.map

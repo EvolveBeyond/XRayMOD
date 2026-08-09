@@ -50,7 +50,12 @@ export default function LoginPage() {
             /* ignore */
           }
         }
-        goPanel('/panel');
+        // Prefer server panel path if provided
+        const panelPath =
+          typeof data.panelPath === 'string' && data.panelPath
+            ? data.panelPath
+            : '/panel';
+        goPanel(panelPath.startsWith('/') ? panelPath : `/${panelPath}`);
         return;
       }
 
@@ -63,18 +68,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden">
-      <div className="absolute inset-0 aperture-grid opacity-50 pointer-events-none" />
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden bg-[var(--bg)]">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-90"
+        style={{
+          background:
+            'radial-gradient(ellipse 55% 40% at 85% -5%, rgba(30,200,200,.14), transparent 55%), radial-gradient(ellipse 40% 35% at -5% 40%, rgba(255,92,69,.06), transparent 50%), linear-gradient(165deg, #08101a 0%, #060b12 100%)',
+        }}
+      />
 
-      <div className="w-full max-w-[400px] relative page-shell">
-        <div className="surface rounded-[var(--radius-lg)] p-7 sm:p-8 border border-[var(--stroke-strong)]">
+      <div className="w-full max-w-[400px] relative">
+        <div className="rounded-[1rem] p-7 sm:p-8 border border-[rgba(140,175,210,.16)] bg-[#101b2a] shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
           <div className="flex flex-col items-center mb-8">
             <div className="brand-mark !w-14 !h-14 mb-5" aria-hidden />
-            <h1 className="font-display text-2xl font-bold tracking-tight">
-              Xray<span className="text-[var(--accent)]">MOD</span>
+            <h1 className="font-display text-2xl font-bold tracking-tight text-[#e8eef6]">
+              Xray<span className="text-[#1ec8c8]">MOD</span>
             </h1>
-            <p className="text-[var(--text-muted)] text-sm mt-2 text-center">
-              {require2fa ? 'تأیید دو مرحله‌ای' : 'ورود امن به کنترل‌پلین'}
+            <p className="text-[#8fa3b8] text-sm mt-2 text-center leading-relaxed">
+              {require2fa ? 'تأیید دو مرحله‌ای' : 'ورود امن به داشبورد'}
             </p>
           </div>
 
@@ -82,42 +93,45 @@ export default function LoginPage() {
             {!require2fa && (
               <>
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-[0.12em]">
-                    Cloudflare email / username
+                  <label className="block text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
+                    نام کاربری / ایمیل
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-faint)]" />
+                    <User className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5c7188]" />
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       autoComplete="username"
-                      className="w-full pl-10 pr-4 py-3.5 bg-[var(--bg)] border border-[var(--stroke-strong)] rounded-[var(--radius)] text-sm focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/15 transition-all placeholder:text-[var(--text-faint)]"
-                      placeholder="you@example.com"
+                      dir="ltr"
+                      className="w-full ps-10 pe-4 py-3.5 bg-[#0a121c] border border-[rgba(140,175,210,.18)] rounded-[0.65rem] text-sm text-[#e8eef6] focus:border-[rgba(30,200,200,.55)] focus:ring-2 focus:ring-[rgba(30,200,200,.12)] outline-none transition-all placeholder:text-[#5c7188]"
+                      placeholder="admin"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-[0.12em]">
-                    Password
+                  <label className="block text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
+                    رمز عبور
                   </label>
                   <div className="relative">
-                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-faint)]" />
+                    <Lock className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5c7188]" />
                     <input
                       type={showPass ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="current-password"
-                      className="w-full pl-10 pr-12 py-3.5 bg-[var(--bg)] border border-[var(--stroke-strong)] rounded-[var(--radius)] text-sm focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/15 transition-all placeholder:text-[var(--text-faint)]"
+                      dir="ltr"
+                      className="w-full ps-10 pe-12 py-3.5 bg-[#0a121c] border border-[rgba(140,175,210,.18)] rounded-[0.65rem] text-sm text-[#e8eef6] focus:border-[rgba(30,200,200,.55)] focus:ring-2 focus:ring-[rgba(30,200,200,.12)] outline-none transition-all placeholder:text-[#5c7188]"
                       placeholder="••••••••"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPass(!showPass)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-faint)] hover:text-[var(--text)] p-1"
+                      className="absolute end-3 top-1/2 -translate-y-1/2 text-[#5c7188] hover:text-[#e8eef6] p-1"
                       tabIndex={-1}
+                      aria-label={showPass ? 'مخفی' : 'نمایش'}
                     >
                       {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -128,9 +142,9 @@ export default function LoginPage() {
 
             {require2fa && (
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-[11px] font-semibold text-[var(--text-faint)] uppercase tracking-[0.12em]">
-                  <Shield size={12} className="text-[var(--accent)]" />
-                  Authenticator
+                <label className="flex items-center gap-2 text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
+                  <Shield size={12} className="text-[#1ec8c8]" />
+                  کد Authenticator
                 </label>
                 <input
                   type="text"
@@ -140,7 +154,8 @@ export default function LoginPage() {
                   onChange={(e) => setTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   autoComplete="one-time-code"
                   autoFocus
-                  className="w-full px-4 py-3.5 bg-[var(--bg)] border border-[var(--stroke-strong)] rounded-[var(--radius)] text-sm text-center tracking-[0.4em] font-mono focus:border-[var(--accent)]/50 focus:ring-2 focus:ring-[var(--accent)]/15"
+                  dir="ltr"
+                  className="w-full px-4 py-3.5 bg-[#0a121c] border border-[rgba(140,175,210,.18)] rounded-[0.65rem] text-sm text-center tracking-[0.4em] font-mono text-[#e8eef6] focus:border-[rgba(30,200,200,.55)] focus:ring-2 focus:ring-[rgba(30,200,200,.12)] outline-none"
                   placeholder="000000"
                   required
                 />
@@ -148,7 +163,7 @@ export default function LoginPage() {
             )}
 
             {error && (
-              <div className="p-3.5 bg-[var(--coral-soft)] border border-[rgba(255,92,69,0.3)] rounded-[var(--radius)] text-sm text-[var(--coral)] leading-relaxed">
+              <div className="p-3.5 bg-[rgba(255,92,69,.1)] border border-[rgba(255,92,69,.28)] rounded-[0.65rem] text-sm text-[#ff5c45] leading-relaxed">
                 {error}
               </div>
             )}
@@ -156,17 +171,17 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || (!require2fa && (!username.trim() || !password))}
-              className="w-full py-3.5 bg-[var(--coral)] hover:brightness-110 active:scale-[0.99] disabled:bg-white/5 disabled:text-[var(--text-faint)] disabled:active:scale-100 text-white font-semibold rounded-[var(--radius)] transition-all flex items-center justify-center gap-2 shadow-[0_10px_28px_-14px_rgba(255,92,69,0.7)] mt-1"
+              className="w-full py-3.5 bg-[#ff5c45] hover:brightness-110 active:scale-[0.99] disabled:opacity-50 disabled:active:scale-100 text-white font-semibold rounded-[0.65rem] transition-all flex items-center justify-center gap-2 shadow-[0_10px_28px_-14px_rgba(255,92,69,0.7)] mt-1"
             >
               {loading ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  در حال ورود...
+                  در حال ورود…
                 </>
               ) : require2fa ? (
                 'تأیید و ادامه'
               ) : (
-                'ورود'
+                'ورود به پنل'
               )}
             </button>
 
@@ -178,7 +193,7 @@ export default function LoginPage() {
                   setChallenge(null);
                   setTotp('');
                 }}
-                className="w-full text-xs text-[var(--text-faint)] hover:text-[var(--text-muted)] py-2"
+                className="w-full text-xs text-[#5c7188] hover:text-[#8fa3b8] py-2"
               >
                 بازگشت
               </button>
@@ -186,7 +201,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-[11px] text-[var(--text-faint)] mt-6 leading-relaxed font-display tracking-wide">
+        <p className="text-center text-[11px] text-[#5c7188] mt-6 leading-relaxed tracking-wide">
           SECURE PATH · private entry
           <br />
           Unauthorized requests return 404

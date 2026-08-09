@@ -124,7 +124,7 @@ async function buildUserLinks(
     path: cfg.path,
     name: cfg.name,
     cleanIPs,
-    max: 10,
+    max: 18,
     carrier,
   });
 
@@ -156,7 +156,7 @@ async function buildUserLinks(
     }
   }
 
-  const unique = [...new Set(links.filter(Boolean))].slice(0, 8);
+  const unique = [...new Set(links.filter(Boolean))].slice(0, 16);
 
   // Custom domains → extra D-tagged configs (BPB-style)
   const domains = await getCustomDomains(env.DB);
@@ -174,7 +174,7 @@ async function buildUserLinks(
   }
 
   return {
-    links: [...unique, ...domainLinks].slice(0, 12),
+    links: [...unique, ...domainLinks].slice(0, 20),
     carrier,
   };
 }

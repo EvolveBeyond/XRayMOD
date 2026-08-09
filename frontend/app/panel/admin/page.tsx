@@ -39,6 +39,9 @@ export default function AdminPage() {
   const [remoteUrl, setRemoteUrl] = useState('');
   const [remoteCookie, setRemoteCookie] = useState('');
   const [loading, setLoading] = useState(true);
+  const [cfToken, setCfToken] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [updateJob, setUpdateJob] = useState<any>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,10 +54,65 @@ export default function AdminPage() {
       }
       const u = await api.get('/api/admin/update-check');
       setUpdate(u);
+      const st = await api.get('/api/admin/update-status');
+      if (st?.job) setUpdateJob(st.job);
     } catch {
       toast.error('Failed to load admin dashboard');
     }
     setLoading(false);
+  };
+
+  const saveCfToken = async () => {
+    if (cfToken.trim().length < 20) {
+      toast.error('توکن Cloudflare را کامل وارد کنید');
+      return;
+    }
+    const res = await api.put('/api/admin/cf-token', { token: cfToken.trim() });
+    if (res.success === false) {
+      toast.error(res.message || 'ذخیره توکن ناموفق');
+      return;
+    }
+    setCfToken('');
+    toast.success('توکن برای بروزرسانی ذخیره شد');
+    load();
+  };
+
+  const runSelfUpdate = async () => {
+    setUpdating(true);
+    setUpdateJob(null);
+    try {
+      const res = await api.post('/api/admin/self-update', {
+        token: cfToken.trim() || undefined,
+        force: true,
+      });
+      if (res.success === false && !res.job) {
+        toast.error(res.message || 'شروع بروزرسانی ناموفق');
+        setUpdating(false);
+        return;
+      }
+      setUpdateJob(res.job);
+      // Poll live steps
+      const started = Date.now();
+      while (Date.now() - started < 12 * 60 * 1000) {
+        await new Promise((r) => setTimeout(r, 900));
+        const st = await api.get('/api/admin/update-status');
+        if (st?.job) {
+          setUpdateJob(st.job);
+          if (st.job.status === 'done') {
+            toast.success('بروزرسانی تمام شد — صفحه را رفرش کنید');
+            break;
+          }
+          if (st.job.status === 'error') {
+            toast.error(st.job.error || 'بروزرسانی ناموفق');
+            break;
+          }
+        }
+      }
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || 'خطا در بروزرسانی');
+    }
+    setUpdating(false);
   };
 
   useEffect(() => {
@@ -174,40 +232,120 @@ export default function AdminPage() {
       </div>
 
       <Card>
-        <CardHeader title="Update panel" />
-        <p className="text-sm text-zinc-400 mb-3">
-          Current <code className="text-emerald-400">{update?.current}</code>
-          {update?.latest ? (
-            <>
-              {' '}
-              · Latest <code className="text-emerald-400">{update.latest}</code>
-            </>
-          ) : null}
-        </p>
-        {update?.update_available ? (
-          <div className="space-y-3">
-            <p className="text-amber-300 text-sm">New release available.</p>
-            <p className="text-xs text-zinc-500">{update.how}</p>
-            {update.release_url && (
+        <CardHeader
+          title="بروزرسانی پنل"
+          description="آخرین نسخه از GitHub روی همین Worker دیپلوی می‌شود — دیتابیس کاربران پاک نمی‌شود"
+        />
+        <div className="space-y-3 text-sm text-zinc-400">
+          <p>
+            نسخه فعلی: <code className="text-emerald-400">{update?.current || dash?.version}</code>
+            {update?.latest ? (
+              <>
+                {' '}
+                · آخرین ریلیز: <code className="text-emerald-400">{update.latest}</code>
+              </>
+            ) : null}
+          </p>
+          {update?.main_sha && (
+            <p className="text-xs text-zinc-500 font-mono">
+              GitHub main: {update.main_sha}
+              {update.main_message ? ` — ${update.main_message}` : ''}
+              {update.last_applied_commit
+                ? ` · آخرین اعمال‌شده: ${update.last_applied_commit}`
+                : ''}
+            </p>
+          )}
+          {update?.update_available ? (
+            <p className="text-amber-300 text-sm">نسخه جدیدتر در GitHub موجود است.</p>
+          ) : (
+            <p className="text-zinc-500 text-sm">از نظر ریلیز/کامیت، به‌روز به نظر می‌رسید (یا هنوز توکن ذخیره نشده).</p>
+          )}
+          <p className="text-xs text-zinc-500">{update?.how}</p>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <p className="text-xs text-zinc-500">
+            توکن Cloudflare (Edit Workers + D1) — یک‌بار ذخیره کنید
+            {update?.has_token ? (
+              <span className="text-emerald-400"> · ذخیره شده ✓</span>
+            ) : (
+              <span className="text-amber-300"> · هنوز ذخیره نشده</span>
+            )}
+          </p>
+          <Input
+            type="password"
+            value={cfToken}
+            onChange={(e: any) => setCfToken(e.target.value)}
+            placeholder="cfut_… یا API Token"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={saveCfToken} disabled={!cfToken.trim()}>
+              <Key className="w-4 h-4 mr-2" />
+              ذخیره توکن
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => api.get('/api/admin/update-check').then(setUpdate)}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              بررسی مجدد
+            </Button>
+            <Button onClick={runSelfUpdate} disabled={updating}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${updating ? 'animate-spin' : ''}`} />
+              {updating ? 'در حال بروزرسانی…' : 'بروزرسانی الان'}
+            </Button>
+            {update?.release_url && (
               <a
                 href={update.release_url}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:underline"
+                className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:underline px-2"
               >
-                <ExternalLink className="w-4 h-4" /> Open release
+                <ExternalLink className="w-4 h-4" /> ریلیز
               </a>
             )}
           </div>
-        ) : (
-          <p className="text-sm text-zinc-500">You are on the latest tracked release (or GitHub unreachable).</p>
-        )}
-        <div className="mt-4">
-          <Button variant="secondary" onClick={() => api.get('/api/admin/update-check').then(setUpdate)}>
-            <Download className="w-4 h-4 mr-2" />
-            Check again
-          </Button>
         </div>
+
+        {(updateJob?.steps?.length || updating) && (
+          <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/80 p-3 max-h-64 overflow-y-auto">
+            <p className="text-xs text-zinc-500 mb-2 font-display">
+              وضعیت:{' '}
+              <span
+                className={
+                  updateJob?.status === 'done'
+                    ? 'text-emerald-400'
+                    : updateJob?.status === 'error'
+                      ? 'text-red-400'
+                      : 'text-amber-300'
+                }
+              >
+                {updateJob?.status || 'running'}
+              </span>
+            </p>
+            <ol className="space-y-1.5 text-[12px] font-mono">
+              {(updateJob?.steps || []).map((s: any) => (
+                <li key={s.id} className="flex gap-2 text-zinc-300">
+                  <span className="text-zinc-600 shrink-0">{s.id}.</span>
+                  <span
+                    className={
+                      s.ok === false
+                        ? 'text-red-400'
+                        : s.ok === true
+                          ? 'text-emerald-400'
+                          : 'text-zinc-300'
+                    }
+                  >
+                    {s.text}
+                  </span>
+                </li>
+              ))}
+              {updating && updateJob?.status === 'running' && (
+                <li className="text-zinc-500">…</li>
+              )}
+            </ol>
+          </div>
+        )}
       </Card>
 
       <Card>

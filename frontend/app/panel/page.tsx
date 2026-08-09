@@ -11,6 +11,7 @@ import {
   Copy,
   Crosshair,
   Smartphone,
+  Sparkles,
 } from 'lucide-react';
 import { api, asList } from '@/lib/api';
 import { CardHeader, ProgressBar, Button, PageHeader } from '@/components';
@@ -37,6 +38,7 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [users, setUsers] = useState<{ total: number; active: number }>({ total: 0, active: 0 });
   const [subHint, setSubHint] = useState('');
+  const [recommendBusy, setRecommendBusy] = useState(false);
 
   useEffect(() => {
     api.get('/api/health').then((d) => setStatus(d)).catch(() => {});
@@ -70,6 +72,36 @@ export default function DashboardPage() {
   const month = status?.traffic?.month;
   const activePct = users.total ? Math.round((users.active / users.total) * 100) : 0;
 
+  const buildRecommendedSub = async () => {
+    setRecommendBusy(true);
+    try {
+      const res = await api.post('/api/cleanip/recommend', {
+        count: 48,
+        countries: ['DE', 'NL', 'FI', 'SE', 'TR'],
+        apply: true,
+      });
+      if (res.success === false) {
+        toast.error(res.message || 'ساخت ساب پیشنهادی ناموفق');
+        return;
+      }
+      const sub = res?.data?.subscriptionUrl || '';
+      if (sub) {
+        setSubHint(sub);
+        try {
+          await navigator.clipboard.writeText(sub);
+        } catch {
+          /* ignore */
+        }
+        toast.success('ساب پیشنهادی آماده و کپی شد');
+      } else {
+        toast.success(res?.data?.message || 'استخر Clean IP به‌روز شد');
+      }
+    } catch {
+      toast.error('خطا در ساخت ساب پیشنهادی');
+    }
+    setRecommendBusy(false);
+  };
+
   return (
     <div className="page-shell space-y-6">
       <PageHeader
@@ -93,6 +125,10 @@ export default function DashboardPage() {
                 <Smartphone size={14} /> Mini App
               </Button>
             </a>
+            <Button size="sm" variant="secondary" onClick={buildRecommendedSub} disabled={recommendBusy}>
+              <Sparkles size={14} />
+              {recommendBusy ? '…' : 'ساب پیشنهادی'}
+            </Button>
             <PanelLink href="/panel/cleanip">
               <Button size="sm">
                 <Radar size={14} /> {t('scanClean')}

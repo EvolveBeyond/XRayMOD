@@ -128,32 +128,48 @@ export function buildRecommendedLinks(args: {
     })
   );
 
-  // 2. Clean IPs first (best for Iranian ISPs)
-  const ips: string[] = [];
+  // 2. Clean IPs first — prefer country-tagged (DE/NL/FI/TR…) for speed
+  type IpEntry = { ip: string; port: number; country: string };
+  const entries: IpEntry[] = [];
+  const seenIp = new Set<string>();
   for (const raw of cleanIPs) {
-    const ip = String(raw).split(':')[0].trim();
-    if (ip && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && !ips.includes(ip)) ips.push(ip);
+    const [hostPort, tag] = String(raw).split('#');
+    const [ip, portStr] = (hostPort || '').split(':');
+    const clean = (ip || '').trim();
+    if (!clean || !/^\d{1,3}(\.\d{1,3}){3}$/.test(clean) || seenIp.has(clean)) continue;
+    seenIp.add(clean);
+    const country = (tag || '').trim().toUpperCase() || 'CF';
+    entries.push({ ip: clean, port: Number(portStr) || 443, country });
   }
+  // Preferred countries first
+  const prefer = ['DE', 'NL', 'FI', 'SE', 'TR', 'GB', 'FR'];
+  entries.sort((a, b) => {
+    const ai = prefer.indexOf(a.country);
+    const bi = prefer.indexOf(b.country);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
 
   let i = 0;
-  for (const ip of ips) {
+  for (const e of entries) {
     if (links.length >= max) break;
     i++;
     const fp = FINGERPRINTS[i % FINGERPRINTS.length];
-    const tag = carrier && carrier !== 'all' ? `${ip} · ${carrier.toUpperCase()}` : ip;
+    const isp = carrier && carrier !== 'all' ? ` · ${carrier.toUpperCase()}` : '';
+    const tag = `${e.country} · ${e.ip}${isp}`;
     push(
       buildVlessWsLink({
         uuid,
-        host: ip,
-        port: 443,
+        host: e.ip,
+        port: e.port || 443,
         path,
-        name: label(`${i + 1}️⃣ ${tag}`),
+        name: label(`⚡ ${tag}`),
         sni: workerHost,
         fingerprint: fp,
         extra: { host: workerHost },
       })
     );
   }
+  const ips = entries.map((e) => e.ip);
 
   // 3. CF alternate ports on worker host
   for (const port of CF_EDGE_PORTS) {
