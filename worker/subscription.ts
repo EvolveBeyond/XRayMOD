@@ -6,6 +6,7 @@ import {
   buildVmessWsLink,
   buildRecommendedLinks,
   toBase64Lines,
+  countryFlag,
 } from './lib/links';
 import { renderUserPortal } from './user-portal';
 import { getSecureBase, getCustomDomains } from './lib/secure-path';
@@ -167,7 +168,7 @@ async function buildUserLinks(
         uuid: user.uuid,
         host: domain,
         path: cfg.path,
-        name: `${cfg.name} · D · ${domain}`,
+        name: `${countryFlag('CF')} ${cfg.name} · D · ${domain}`,
         sni: domain,
       })
     );

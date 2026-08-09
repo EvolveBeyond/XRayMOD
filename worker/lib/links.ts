@@ -20,6 +20,39 @@ export type LinkOpts = {
 export const CF_EDGE_PORTS = [443, 2053, 2083, 2087, 2096, 8443] as const;
 export const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'edge'] as const;
 
+const COUNTRY_NAMES: Record<string, string> = {
+  DE: 'Germany',
+  NL: 'Netherlands',
+  FI: 'Finland',
+  SE: 'Sweden',
+  TR: 'Turkey',
+  GB: 'UK',
+  FR: 'France',
+  US: 'USA',
+  IR: 'Iran',
+  CF: 'Cloudflare',
+};
+
+/** ISO country code → flag emoji (🇩🇪). CF → cloud. */
+export function countryFlag(code: string): string {
+  const cc = String(code || '')
+    .trim()
+    .toUpperCase();
+  if (!cc || cc === 'CF') return '☁️';
+  if (!/^[A-Z]{2}$/.test(cc)) return '🌐';
+  const A = 0x1f1e6;
+  return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
+}
+
+export function countryLabel(code: string): string {
+  const cc = String(code || 'CF')
+    .trim()
+    .toUpperCase() || 'CF';
+  const flag = countryFlag(cc);
+  const name = COUNTRY_NAMES[cc] || cc;
+  return `${flag} ${name}`;
+}
+
 function qs(params: Record<string, string | undefined>): string {
   const parts: string[] = [];
   for (const [k, v] of Object.entries(params)) {
@@ -122,7 +155,7 @@ export function buildRecommendedLinks(args: {
       host: workerHost,
       port: 443,
       path,
-      name: label('① Direct'),
+      name: label(`${countryFlag('CF')} Direct`),
       sni: workerHost,
       fingerprint: 'chrome',
     })
@@ -155,14 +188,15 @@ export function buildRecommendedLinks(args: {
     i++;
     const fp = FINGERPRINTS[i % FINGERPRINTS.length];
     const isp = carrier && carrier !== 'all' ? ` · ${carrier.toUpperCase()}` : '';
-    const tag = `${e.country} · ${e.ip}${isp}`;
+    // e.g. "🇩🇪 Germany · 188.114.96.12 · MTN"
+    const tag = `${countryLabel(e.country)} · ${e.ip}${isp}`;
     push(
       buildVlessWsLink({
         uuid,
         host: e.ip,
         port: e.port || 443,
         path,
-        name: label(`⚡ ${tag}`),
+        name: label(tag),
         sni: workerHost,
         fingerprint: fp,
         extra: { host: workerHost },
@@ -170,6 +204,7 @@ export function buildRecommendedLinks(args: {
     );
   }
   const ips = entries.map((e) => e.ip);
+  const countryByIp = new Map(entries.map((e) => [e.ip, e.country]));
 
   // 3. CF alternate ports on worker host
   for (const port of CF_EDGE_PORTS) {
@@ -181,7 +216,7 @@ export function buildRecommendedLinks(args: {
         host: workerHost,
         port,
         path,
-        name: label(`Port ${port}`),
+        name: label(`${countryFlag('CF')} Port ${port}`),
         sni: workerHost,
         fingerprint: 'chrome',
       })
@@ -190,6 +225,7 @@ export function buildRecommendedLinks(args: {
 
   // 4. Fingerprint variants on clean IP #1 or worker
   const host2 = ips[0] || workerHost;
+  const host2Cc = countryByIp.get(host2) || 'CF';
   for (const fp of FINGERPRINTS) {
     if (links.length >= max) break;
     if (fp === 'chrome' && host2 === workerHost) continue;
@@ -199,7 +235,7 @@ export function buildRecommendedLinks(args: {
         host: host2,
         port: 443,
         path,
-        name: label(`FP ${fp}`),
+        name: label(`${countryLabel(host2Cc)} · FP ${fp}`),
         sni: workerHost,
         fingerprint: fp,
         extra: host2 !== workerHost ? { host: workerHost } : undefined,
@@ -210,13 +246,14 @@ export function buildRecommendedLinks(args: {
   // 5. Extra clean IPs on port 8443 if still short
   for (const ip of ips.slice(0, 4)) {
     if (links.length >= max) break;
+    const cc = countryByIp.get(ip) || 'CF';
     push(
       buildVlessWsLink({
         uuid,
         host: ip,
         port: 8443,
         path,
-        name: label(`${ip}:8443`),
+        name: label(`${countryLabel(cc)} · ${ip}:8443`),
         sni: workerHost,
         fingerprint: 'chrome',
         extra: { host: workerHost },

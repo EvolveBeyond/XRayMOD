@@ -46,6 +46,23 @@ interface NetworkHint {
 const PORTS = [443, 8443, 2053, 2083, 2087, 2096];
 const COUNTRIES = ['DE', 'NL', 'FI', 'SE', 'TR', 'GB', 'FR', 'US'] as const;
 
+const FLAG: Record<string, string> = {
+  DE: '🇩🇪',
+  NL: '🇳🇱',
+  FI: '🇫🇮',
+  SE: '🇸🇪',
+  TR: '🇹🇷',
+  GB: '🇬🇧',
+  FR: '🇫🇷',
+  US: '🇺🇸',
+  CF: '☁️',
+};
+
+function flagOf(cc?: string) {
+  const c = (cc || 'CF').toUpperCase();
+  return FLAG[c] || '🌐';
+}
+
 function gradeLatency(ms: number): ScanResult['grade'] {
   if (ms < 80) return 'S';
   if (ms < 140) return 'A';
@@ -445,7 +462,7 @@ export default function CleanIPPage() {
                     : 'border-[var(--stroke)] text-[var(--text-muted)]'
                 }`}
               >
-                {cc}
+                {flagOf(cc)} {cc}
               </button>
             ))}
           </div>
@@ -556,7 +573,7 @@ export default function CleanIPPage() {
                       {r.ip}:{r.port}
                     </td>
                     <td className="px-3 py-2 text-xs font-mono text-[var(--accent)]">
-                      {r.country || 'CF'}
+                      {flagOf(r.country)} {r.country || 'CF'}
                     </td>
                     <td className={`px-3 py-2 text-xs font-mono ${gradeColor(r.grade)}`}>
                       {r.latency}ms
@@ -613,10 +630,12 @@ export default function CleanIPPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <Radar size={14} className="text-[var(--accent)] shrink-0" />
                   <span className="text-sm font-mono truncate">
-                    {ip.ip}:{ip.port}
+                    {flagOf(ip.country || ip.label)} {ip.ip}:{ip.port}
                   </span>
-                  {ip.label && (
-                    <span className="text-[10px] text-[var(--text-faint)] truncate">{ip.label}</span>
+                  {(ip.country || ip.label) && (
+                    <span className="text-[10px] text-[var(--text-faint)] truncate">
+                      {ip.country || ip.label}
+                    </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
