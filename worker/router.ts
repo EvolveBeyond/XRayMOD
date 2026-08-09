@@ -119,6 +119,19 @@ function isStaticAssetPath(pathname: string): boolean {
   );
 }
 
+/** Mini App / Telegram / store routes — deleted from product; hard 404. */
+function isRemovedPath(pathname: string): boolean {
+  const p = pathname.toLowerCase();
+  return (
+    p === '/twa' ||
+    p.startsWith('/twa/') ||
+    p === '/bot' ||
+    p.startsWith('/bot/') ||
+    p === '/api/commerce' ||
+    p.startsWith('/api/commerce/')
+  );
+}
+
 async function serveAsset(
   request: Request,
   env: Env,
@@ -183,6 +196,11 @@ export async function handleRequest(
     const isUpgrade = request.headers.get('Upgrade') === 'websocket';
     const isGrpc = request.method === 'POST' && isGrpcRequest(request);
     const isXhttp = request.method === 'POST' && isXHTTPRequest(request);
+
+    // Removed product surfaces — never SPA-fallback or serve leftover assets
+    if (isRemovedPath(pathname)) {
+      return silent404();
+    }
 
     // WebSocket / gRPC / XHTTP → proxy (same Worker edge; kill switch + monthly cap)
     if (isUpgrade || isGrpc || isXhttp) {
@@ -295,6 +313,10 @@ export async function handleRequest(
       pathname = '/' + segments.slice(1).join('/');
       if (pathname === '/') pathname = '/';
       url.pathname = pathname;
+
+      if (isRemovedPath(pathname)) {
+        return silent404();
+      }
 
       // Non-_next static under SECURE PATH (rare)
       if (isStaticAssetPath(pathname)) {

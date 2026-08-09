@@ -13,6 +13,18 @@ export async function serveStatic(
 ): Promise<Response | null> {
   if (!env.ASSETS) return null;
 
+  // Never SPA-fallback removed Mini App / Telegram / store paths
+  const lower = pathname.toLowerCase();
+  if (
+    lower === '/twa' ||
+    lower.startsWith('/twa/') ||
+    lower === '/bot' ||
+    lower.startsWith('/bot/') ||
+    lower.startsWith('/api/commerce')
+  ) {
+    return null;
+  }
+
   const candidates = buildAssetCandidates(pathname);
 
   for (const path of candidates) {
@@ -27,13 +39,21 @@ export async function serveStatic(
     }
   }
 
-  try {
-    const spa = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
-    if (spa.status === 200) {
-      return injectHtmlGlobals(spa, origin, panelPrefix);
+  // SPA fallback only for real panel/login routes — not arbitrary paths
+  if (
+    pathname === '/' ||
+    pathname.startsWith('/panel') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/install')
+  ) {
+    try {
+      const spa = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+      if (spa.status === 200) {
+        return injectHtmlGlobals(spa, origin, panelPrefix);
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
 
   return null;
