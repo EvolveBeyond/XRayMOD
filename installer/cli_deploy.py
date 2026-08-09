@@ -299,6 +299,7 @@ preview_urls = true
 directory = "./frontend/out"
 binding = "ASSETS"
 run_worker_first = true
+not_found_handling = "none"
 
 [[d1_databases]]
 binding = "DB"
