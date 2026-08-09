@@ -404,7 +404,7 @@ export default function LabPage() {
         </BentoCell>
 
         {/* Whitelabel */}
-        <BentoCell span={7}>
+        <BentoCell span={6}>
           <div className="flex items-start gap-3 mb-4">
             <div className="p-2 rounded-md bg-[rgba(251,191,36,.12)] text-[#fbbf24]">
               <Palette size={16} />
@@ -451,7 +451,7 @@ export default function LabPage() {
           </Button>
         </BentoCell>
 
-        <BentoCell span={5}>
+        <BentoCell span={6}>
           <div className="flex items-start gap-3 mb-4">
             <div className="p-2 rounded-md bg-[rgba(251,113,133,.12)] text-[#fb7185]">
               <Shield size={16} />
