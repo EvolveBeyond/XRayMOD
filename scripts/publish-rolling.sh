@@ -66,15 +66,16 @@ fi
 
 REPO="${GITHUB_REPOSITORY:-askarniroomand/XRayMOD}"
 SHA="$(git rev-parse HEAD)"
-echo "==> publish GitHub release :rolling on $REPO @ $SHA"
+PRODUCT_VER="$(node -p "require('./package.json').version" 2>/dev/null || echo unknown)"
+echo "==> publish GitHub release :rolling on $REPO @ $SHA (v$PRODUCT_VER)"
 gh release delete rolling --repo "$REPO" -y 2>/dev/null || true
 git tag -f rolling "$SHA"
-git push -f "https://github.com/${REPO}.git" rolling
+git push -f "https://github.com/${REPO}.git" "refs/tags/rolling"
 gh release create rolling \
   --repo "$REPO" \
   --target "$SHA" \
-  --title "XRayMOD rolling bundle" \
-  --notes "Auto-built worker + UI assets for in-panel self-update. D1-safe redeploy." \
+  --title "XRayMOD rolling bundle ${PRODUCT_VER}" \
+  --notes "XRayMOD ${PRODUCT_VER} @ ${SHA} — worker + UI assets for in-panel self-update. D1-safe redeploy." \
   --latest=false \
   .rolling/worker.mjs \
   .rolling/assets.tar.gz

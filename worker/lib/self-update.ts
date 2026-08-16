@@ -93,10 +93,26 @@ async function latestMainSha(): Promise<{ sha: string; message: string }> {
   return { sha: data.sha.slice(0, 12), message: (data.commit?.message || '').split('\n')[0] };
 }
 
-async function downloadReleaseAsset(name: string, minBytes = 500): Promise<Uint8Array> {
+/** Commit the `rolling` release tag points at (what self-update actually deploys). */
+async function rollingTagSha(): Promise<string> {
+  const res = await fetch(`https://api.github.com/repos/${REPO}/git/ref/tags/rolling`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'XRayMOD-SelfUpdate',
+    },
+  });
+  if (!res.ok) throw new Error(`GitHub rolling tag HTTP ${res.status}`);
+  const data = (await res.json()) as { object?: { sha?: string } };
+  const sha = (data.object?.sha || '').slice(0, 12);
+  if (!sha) throw new Error('GitHub: rolling tag missing sha');
+  return sha;
+}
+
+async function downloadReleaseAsset(name: string, minBytes = 500, cacheBust = ''): Promise<Uint8Array> {
+  const q = cacheBust ? `?v=${encodeURIComponent(cacheBust)}` : '';
   const urls = [
-    `https://github.com/${REPO}/releases/download/rolling/${name}`,
-    `https://cdn.jsdelivr.net/gh/${REPO}@rolling/${name}`,
+    `https://github.com/${REPO}/releases/download/rolling/${name}${q}`,
+    `https://cdn.jsdelivr.net/gh/${REPO}@rolling/${name}${q}`,
   ];
   let last = '';
   for (const url of urls) {
@@ -328,8 +344,21 @@ export async function startSelfUpdate(
 
     await step(env.DB, job, 'دریافت آخرین commit از GitHub (main)…');
     const latest = await latestMainSha();
-    job.commit = latest.sha;
-    await step(env.DB, job, `آخرین commit: ${latest.sha} — ${latest.message}`, true);
+    await step(env.DB, job, `آخرین commit main: ${latest.sha} — ${latest.message}`, true);
+
+    await step(env.DB, job, 'بررسی ریلیز rolling (باندل واقعی آپدیت)…');
+    const rollingSha = await rollingTagSha();
+    job.commit = rollingSha;
+    if (rollingSha !== latest.sha) {
+      await step(
+        env.DB,
+        job,
+        `هشدار: rolling=${rollingSha} از main=${latest.sha} عقب است — همین باندل rolling دیپلوی می‌شود`,
+        false
+      );
+    } else {
+      await step(env.DB, job, `rolling هم‌تراز main است: ${rollingSha}`, true);
+    }
 
     await step(env.DB, job, 'شناسایی اکانت و Worker…');
     if (!accountId) {
@@ -355,8 +384,8 @@ export async function startSelfUpdate(
     }
     await step(env.DB, job, `D1 حفظ می‌شود: ${d1Id.slice(0, 8)}…`, true);
 
-    await step(env.DB, job, 'دانلود باندل Worker از GitHub (rolling)…');
-    const moduleBytes = await downloadReleaseAsset('worker.mjs', 1000);
+    await step(env.DB, job, `دانلود باندل Worker از GitHub (rolling @ ${rollingSha})…`);
+    const moduleBytes = await downloadReleaseAsset('worker.mjs', 1000, rollingSha);
     await step(
       env.DB,
       job,
@@ -367,7 +396,7 @@ export async function startSelfUpdate(
     let assetsJwt: string | null = null;
     try {
       await step(env.DB, job, 'دانلود باندل UI (assets.tar.gz)…');
-      const gz = await downloadReleaseAsset('assets.tar.gz', 1000);
+      const gz = await downloadReleaseAsset('assets.tar.gz', 1000, rollingSha);
       await step(env.DB, job, `UI فشرده: ${Math.round(gz.byteLength / 1024)} KB`, true);
       const tar = await gunzip(gz);
       const files = untar(tar);
@@ -390,7 +419,8 @@ export async function startSelfUpdate(
     await step(env.DB, job, 'دیپلوی با موفقیت انجام شد', true);
 
     await kvSet(env.DB, 'panel.version', XRayMOD_VERSION);
-    await kvSet(env.DB, 'panel.last_update_commit', latest.sha);
+    // Record the rolling asset SHA that was actually deployed (not main tip).
+    await kvSet(env.DB, 'panel.last_update_commit', rollingSha);
     await kvSet(env.DB, 'panel.worker_name', workerName);
 
     job.status = 'done';

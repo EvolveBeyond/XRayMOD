@@ -324,12 +324,17 @@ export default function AdminPage() {
             <p className="text-xs text-zinc-500 font-mono">
               GitHub main: {update.main_sha}
               {update.main_message ? ` — ${update.main_message}` : ''}
+              {update.rolling_sha ? ` · rolling: ${update.rolling_sha}` : ''}
               {update.last_applied_commit
                 ? ` · آخرین اعمال‌شده: ${update.last_applied_commit}`
                 : ''}
             </p>
           )}
-          {update?.update_available ? (
+          {update?.rolling_behind_main ? (
+            <p className="text-amber-300 text-sm">
+              باندل rolling از main عقب است — اول ریلیز rolling را publish کنید، بعد آپدیت بزنید.
+            </p>
+          ) : update?.update_available ? (
             <p className="text-amber-300 text-sm">نسخه جدیدتر در GitHub موجود است.</p>
           ) : (
             <p className="text-zinc-500 text-sm">از نظر ریلیز/کامیت، به‌روز به نظر می‌رسید (یا هنوز توکن ذخیره نشده).</p>

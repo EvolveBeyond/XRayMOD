@@ -18,6 +18,8 @@ const GITHUB_RELEASES =
   'https://api.github.com/repos/askarniroomand/XRayMOD/releases/latest';
 const GITHUB_COMMITS =
   'https://api.github.com/repos/askarniroomand/XRayMOD/commits/main';
+const GITHUB_ROLLING_TAG =
+  'https://api.github.com/repos/askarniroomand/XRayMOD/git/ref/tags/rolling';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -117,10 +119,10 @@ export async function handleAdmin(
     });
   }
 
-  // GET /api/admin/update-check — compare with GitHub main + latest release
+  // GET /api/admin/update-check — compare with GitHub main + rolling bundle tip
   if (action === 'update-check' && request.method === 'GET') {
     try {
-      const [relRes, commitRes] = await Promise.all([
+      const [relRes, commitRes, rollingRes] = await Promise.all([
         fetch(GITHUB_RELEASES, {
           headers: {
             Accept: 'application/vnd.github+json',
@@ -128,6 +130,12 @@ export async function handleAdmin(
           },
         }),
         fetch(GITHUB_COMMITS, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'XRayMOD-Panel',
+          },
+        }),
+        fetch(GITHUB_ROLLING_TAG, {
           headers: {
             Accept: 'application/vnd.github+json',
             'User-Agent': 'XRayMOD-Panel',
@@ -144,7 +152,11 @@ export async function handleAdmin(
           html_url?: string;
           body?: string;
         };
-        latest = (data.tag_name || '').replace(/^v/i, '') || APP_VERSION;
+        const tag = (data.tag_name || '').replace(/^v/i, '');
+        // "rolling" is a channel tag, not a product semver — keep APP_VERSION as current product id
+        if (tag && tag !== 'rolling' && /^\d+\.\d+/.test(tag)) {
+          latest = tag;
+        }
         release_url = data.html_url || '';
         notes = (data.body || '').slice(0, 2000);
       }
@@ -160,6 +172,14 @@ export async function handleAdmin(
         main_message = (c.commit?.message || '').split('\n')[0];
       }
 
+      let rolling_sha = '';
+      if (rollingRes.ok) {
+        const ref = (await rollingRes.json()) as {
+          object?: { sha?: string; type?: string };
+        };
+        rolling_sha = (ref.object?.sha || '').slice(0, 12);
+      }
+
       const last = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
         .bind('panel.last_update_commit')
         .first<{ v: string }>();
@@ -167,24 +187,34 @@ export async function handleAdmin(
         .bind('panel.cf_api_token')
         .first<{ v: string }>();
       const has_token = !!(tokenRow?.v && tokenRow.v.length > 20);
+      const lastApplied = (last?.v || '').slice(0, 12);
 
+      // Self-update deploys the *rolling* release assets, not live main tip.
+      // Available when: rolling tip differs from last applied, or rolling lags main, or no apply yet.
+      const rollingBehindMain = !!main_sha && !!rolling_sha && main_sha !== rolling_sha;
       const update_available =
         (!!latest && latest !== APP_VERSION && compareSemver(latest, APP_VERSION) > 0) ||
-        (!!main_sha && !!last?.v && main_sha !== last.v.slice(0, 12)) ||
-        (!!main_sha && !last?.v);
+        (!!rolling_sha && !!lastApplied && rolling_sha !== lastApplied) ||
+        (!!rolling_sha && !lastApplied) ||
+        rollingBehindMain;
 
       return json({
         success: true,
         current: APP_VERSION,
         latest: latest || APP_VERSION,
         update_available,
-        release_url,
+        release_url:
+          release_url || 'https://github.com/askarniroomand/XRayMOD/releases/tag/rolling',
         notes,
         main_sha,
         main_message,
+        rolling_sha,
+        rolling_behind_main: rollingBehindMain,
         last_applied_commit: last?.v || '',
         has_token,
-        how: 'دکمه «بروزرسانی الان» آخرین کد GitHub را می‌گیرد و روی همین Worker دیپلوی می‌کند. D1 و کاربران پاک نمی‌شوند.',
+        how: rollingBehindMain
+          ? 'ریلیز rolling از main عقب است — اول scripts/publish-rolling.sh را روی ریپو اجرا کنید، بعد «بروزرسانی الان».'
+          : 'دکمه «بروزرسانی الان» باندل ریلیز rolling را می‌گیرد و روی همین Worker دیپلوی می‌کند. D1 و کاربران پاک نمی‌شوند.',
       });
     } catch (e) {
       return json({
