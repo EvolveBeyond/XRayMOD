@@ -6,7 +6,7 @@ export function isXHTTPRequest(request: Request): boolean {
 
   const path = new URL(request.url).pathname.toLowerCase();
   // Only treat as XHTTP when path looks like a proxy tunnel, not /api/*
-  if (path.startsWith('/api/') || path.startsWith('/install') || path.startsWith('/bot')) {
+  if (path.startsWith('/api/') || path.startsWith('/install')) {
     return false;
   }
 

@@ -26,12 +26,14 @@ interface ScanResult {
   score: number;
   samples: number;
   grade: 'S' | 'A' | 'B' | 'C' | 'D';
+  country?: string;
 }
 
 interface CleanIP {
   ip: string;
   port: number;
   label: string;
+  country?: string;
 }
 
 interface NetworkHint {
@@ -42,6 +44,24 @@ interface NetworkHint {
 }
 
 const PORTS = [443, 8443, 2053, 2083, 2087, 2096];
+const COUNTRIES = ['DE', 'NL', 'FI', 'SE', 'TR', 'GB', 'FR', 'US'] as const;
+
+const FLAG: Record<string, string> = {
+  DE: '🇩🇪',
+  NL: '🇳🇱',
+  FI: '🇫🇮',
+  SE: '🇸🇪',
+  TR: '🇹🇷',
+  GB: '🇬🇧',
+  FR: '🇫🇷',
+  US: '🇺🇸',
+  CF: '☁️',
+};
+
+function flagOf(cc?: string) {
+  const c = (cc || 'CF').toUpperCase();
+  return FLAG[c] || '🌐';
+}
 
 function gradeLatency(ms: number): ScanResult['grade'] {
   if (ms < 80) return 'S';
@@ -111,10 +131,14 @@ export default function CleanIPPage() {
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const [scanProgress, setScanProgress] = useState(0);
   const [selectedPort, setSelectedPort] = useState(443);
-  const [scanCount, setScanCount] = useState(40);
+  const [scanCount, setScanCount] = useState(64);
+  const [countries, setCountries] = useState<string[]>(['DE', 'NL', 'FI', 'SE', 'TR']);
   const [network, setNetwork] = useState<NetworkHint | null>(null);
   const [statusLine, setStatusLine] = useState('آمادهٔ اسکن از شبکهٔ شما');
+  const [recommendBusy, setRecommendBusy] = useState(false);
+  const [recommendSub, setRecommendSub] = useState('');
   const abortRef = useRef(false);
+  const countryByIp = useRef<Record<string, string>>({});
 
   const loadCleanIPs = useCallback(async () => {
     try {
@@ -125,14 +149,21 @@ export default function CleanIPPage() {
         list
           .map((item: string | CleanIP) => {
             if (typeof item === 'string') {
-              const [ipPort, label] = item.split('#');
+              const [ipPort, tag] = item.split('#');
               const [ip, port] = (ipPort || '').split(':');
-              return { ip: ip || '', port: Number(port) || 443, label: label?.trim() || '' };
+              const country = tag?.trim().toUpperCase() || '';
+              return {
+                ip: ip || '',
+                port: Number(port) || 443,
+                label: country,
+                country,
+              };
             }
             return {
               ip: item.ip || '',
               port: item.port || 443,
-              label: item.label || '',
+              label: item.label || item.country || '',
+              country: item.country || item.label || '',
             };
           })
           .filter((x: CleanIP) => x.ip)
@@ -158,20 +189,27 @@ export default function CleanIPPage() {
     setScanResults([]);
     setScanProgress(0);
     abortRef.current = false;
-    setStatusLine('دریافت لیست IP مناسب ISP شما…');
+    setStatusLine('دریافت لیست IP کشورهای خوب (DE/NL/FI/…)…');
+    countryByIp.current = {};
 
-    let targets: { ip: string; port: number }[] = [];
+    let targets: { ip: string; port: number; country?: string }[] = [];
     try {
-      const data = await api.get(
-        `/api/cleanip/scan?count=${scanCount}&port=${selectedPort}`
-      );
+      const qs = new URLSearchParams({
+        count: String(scanCount),
+        port: String(selectedPort),
+        countries: countries.join(','),
+      });
+      const data = await api.get(`/api/cleanip/scan?${qs}`);
       const isp = data?.data?.isp || data?.isp;
       if (isp) setNetwork(isp);
       const raw: string[] = data?.data?.ips || data?.ips || [];
       targets = raw
         .map((s) => {
-          const [ip, port] = String(s).split(':');
-          return { ip, port: Number(port) || selectedPort };
+          const [hostPort, tag] = String(s).split('#');
+          const [ip, port] = (hostPort || '').split(':');
+          const country = tag?.trim().toUpperCase() || 'CF';
+          if (ip) countryByIp.current[ip] = country;
+          return { ip, port: Number(port) || selectedPort, country };
         })
         .filter((t) => t.ip);
     } catch {
@@ -207,12 +245,21 @@ export default function CleanIPPage() {
       if (abortRef.current) break;
       const batch = targets.slice(i, i + batchSize);
       const settled = await Promise.allSettled(
-        batch.map((t) => probeFromClient(t.ip, t.port, 3))
+        batch.map(async (t) => {
+          const r = await probeFromClient(t.ip, t.port, 3);
+          if (!r) return null;
+          return { ...r, country: t.country || countryByIp.current[t.ip] || 'CF' };
+        })
       );
       for (const r of settled) {
         if (r.status === 'fulfilled' && r.value) {
           results.push(r.value);
-          results.sort((a, b) => a.score - b.score);
+          // Prefer lower score, then preferred countries
+          const rank = (c?: string) =>
+            ['DE', 'NL', 'FI', 'SE', 'TR'].indexOf(c || '') === -1
+              ? 9
+              : ['DE', 'NL', 'FI', 'SE', 'TR'].indexOf(c || '');
+          results.sort((a, b) => a.score - b.score || rank(a.country) - rank(b.country));
           setScanResults([...results]);
         }
       }
@@ -243,14 +290,63 @@ export default function CleanIPPage() {
   const applyIPs = async (list: ScanResult[]) => {
     if (!list.length) return;
     try {
-      const existing = cleanIPs.map((c) => `${c.ip}:${c.port}`);
-      const next = [...new Set([...existing, ...list.map((r) => `${r.ip}:${r.port}`)])];
+      const existing = cleanIPs.map(
+        (c) => `${c.ip}:${c.port}${c.country ? `#${c.country}` : ''}`
+      );
+      const next = [
+        ...new Set([
+          ...list.map(
+            (r) => `${r.ip}:${r.port}#${r.country || countryByIp.current[r.ip] || 'CF'}`
+          ),
+          ...existing,
+        ]),
+      ].slice(0, 80);
       await api.post('/api/cleanip/apply', { ips: next });
       await loadCleanIPs();
       toast.success(`${list.length} آی‌پی ذخیره شد`);
     } catch {
       toast.error('ذخیره ناموفق');
     }
+  };
+
+  const toggleCountry = (cc: string) => {
+    setCountries((prev) =>
+      prev.includes(cc) ? prev.filter((x) => x !== cc) : [...prev, cc]
+    );
+  };
+
+  const buildRecommendedSub = async () => {
+    setRecommendBusy(true);
+    try {
+      // Apply fastest scanned IPs first if available
+      if (scanResults.length) {
+        await applyIPs(scanResults.slice(0, 20));
+      }
+      const res = await api.post('/api/cleanip/recommend', {
+        count: 48,
+        countries,
+        apply: true,
+      });
+      if (res.success === false) {
+        toast.error(res.message || 'ساخت ساب پیشنهادی ناموفق');
+        return;
+      }
+      const sub = res?.data?.subscriptionUrl || '';
+      setRecommendSub(sub);
+      await loadCleanIPs();
+      toast.success(res?.data?.message || 'ساب پیشنهادی آماده شد');
+      if (sub) {
+        try {
+          await navigator.clipboard.writeText(sub);
+          toast.message('لینک ساب کپی شد');
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      toast.error('خطا در ساخت ساب پیشنهادی');
+    }
+    setRecommendBusy(false);
   };
 
   const removeCleanIP = async (ip: string) => {
@@ -278,15 +374,25 @@ export default function CleanIPPage() {
         title="آی‌پی تمیز"
         description="اسکن واقعی از اینترنت شما — بهترین edge برای همین مسیر"
         actions={
-          scanning ? (
-            <Button variant="danger" onClick={stopScan}>
-              <Square size={14} /> توقف
+          <>
+            <Button
+              variant="secondary"
+              onClick={buildRecommendedSub}
+              disabled={recommendBusy || scanning}
+            >
+              <Sparkles size={14} />
+              {recommendBusy ? 'در حال ساخت…' : 'ساب پیشنهادی'}
             </Button>
-          ) : (
-            <Button onClick={scanIPs}>
-              <Play size={14} /> شروع اسکن شبکه
-            </Button>
-          )
+            {scanning ? (
+              <Button variant="danger" onClick={stopScan}>
+                <Square size={14} /> توقف
+              </Button>
+            ) : (
+              <Button onClick={scanIPs}>
+                <Play size={14} /> شروع اسکن شبکه
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -306,10 +412,13 @@ export default function CleanIPPage() {
               تست از همان شبکه‌ای که الان پنل را باز کرده‌اید
             </h2>
             <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-xl">
-              لیست IP بر اساس ISP شما گرفته می‌شود، بعد مرورگر شما هر IP را از مسیر واقعی اینترنتتان
-              پروب می‌کند و بهترین‌ها را پیشنهاد می‌دهد.
+              استخر بزرگ از کشورهای سریع (آلمان، هلند، فنلاند، ترکیه، …) + تست واقعی از اینترنت شما.
+              بعد با «ساب پیشنهادی» بهترین‌ها داخل ساب می‌آیند.
             </p>
             <p className="text-xs font-mono text-[var(--text-faint)]">{statusLine}</p>
+            {recommendSub && (
+              <p className="text-xs font-mono text-[var(--accent)] break-all">{recommendSub}</p>
+            )}
           </div>
           <div className="surface rounded-[var(--radius)] p-4 border border-[var(--stroke)] space-y-2">
             <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-faint)] font-display font-semibold">
@@ -339,38 +448,57 @@ export default function CleanIPPage() {
           title="تنظیمات اسکن"
           description="پورت و تعداد هدف — هرچه بیشتر، دقیق‌تر و کندتر"
         />
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <span className="text-xs text-[var(--text-faint)]">Port</span>
-          <div className="flex flex-wrap gap-1.5">
-            {PORTS.map((p) => (
+        <div className="space-y-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-[var(--text-faint)]">کشورها</span>
+            {COUNTRIES.map((cc) => (
               <button
-                key={p}
+                key={cc}
                 type="button"
-                onClick={() => setSelectedPort(p)}
+                onClick={() => toggleCountry(cc)}
                 className={`px-2.5 py-1 rounded-[var(--radius)] text-xs font-mono border transition-colors ${
-                  selectedPort === p
+                  countries.includes(cc)
                     ? 'border-[var(--accent)]/50 bg-[var(--accent-soft)] text-[var(--accent)]'
-                    : 'border-[var(--stroke)] text-[var(--text-muted)] hover:border-[var(--stroke-strong)]'
+                    : 'border-[var(--stroke)] text-[var(--text-muted)]'
                 }`}
               >
-                {p}
+                {flagOf(cc)} {cc}
               </button>
             ))}
           </div>
-          <label className="ms-auto flex items-center gap-2 text-xs text-[var(--text-muted)]">
-            تعداد
-            <select
-              value={scanCount}
-              onChange={(e) => setScanCount(Number(e.target.value))}
-              className="bg-[var(--bg)] border border-[var(--stroke-strong)] rounded-[var(--radius)] px-2 py-1 text-xs"
-            >
-              {[24, 40, 64, 80].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-[var(--text-faint)]">Port</span>
+            <div className="flex flex-wrap gap-1.5">
+              {PORTS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setSelectedPort(p)}
+                  className={`px-2.5 py-1 rounded-[var(--radius)] text-xs font-mono border transition-colors ${
+                    selectedPort === p
+                      ? 'border-[var(--accent)]/50 bg-[var(--accent-soft)] text-[var(--accent)]'
+                      : 'border-[var(--stroke)] text-[var(--text-muted)] hover:border-[var(--stroke-strong)]'
+                  }`}
+                >
+                  {p}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+            <label className="ms-auto flex items-center gap-2 text-xs text-[var(--text-muted)]">
+              تعداد
+              <select
+                value={scanCount}
+                onChange={(e) => setScanCount(Number(e.target.value))}
+                className="bg-[var(--bg)] border border-[var(--stroke-strong)] rounded-[var(--radius)] px-2 py-1 text-xs"
+              >
+                {[40, 64, 80, 100, 120].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         {scanning && (
@@ -422,7 +550,7 @@ export default function CleanIPPage() {
             <table className="w-full">
               <thead className="sticky top-0 bg-[var(--bg-panel)]">
                 <tr className="border-b border-[var(--stroke)]">
-                  {['#', 'IP:Port', 'Latency', 'Jitter', 'Loss', 'Grade', 'Score', ''].map((h) => (
+                  {['#', 'IP:Port', 'CC', 'Latency', 'Jitter', 'Loss', 'Grade', 'Score', ''].map((h) => (
                     <th
                       key={h || 'a'}
                       className="text-start px-3 py-2 text-[10px] font-display font-semibold text-[var(--text-faint)] uppercase tracking-wide"
@@ -443,6 +571,9 @@ export default function CleanIPPage() {
                     <td className="px-3 py-2 text-xs text-[var(--text-faint)]">{i + 1}</td>
                     <td className="px-3 py-2 text-xs font-mono">
                       {r.ip}:{r.port}
+                    </td>
+                    <td className="px-3 py-2 text-xs font-mono text-[var(--accent)]">
+                      {flagOf(r.country)} {r.country || 'CF'}
                     </td>
                     <td className={`px-3 py-2 text-xs font-mono ${gradeColor(r.grade)}`}>
                       {r.latency}ms
@@ -499,10 +630,12 @@ export default function CleanIPPage() {
                 <div className="flex items-center gap-3 min-w-0">
                   <Radar size={14} className="text-[var(--accent)] shrink-0" />
                   <span className="text-sm font-mono truncate">
-                    {ip.ip}:{ip.port}
+                    {flagOf(ip.country || ip.label)} {ip.ip}:{ip.port}
                   </span>
-                  {ip.label && (
-                    <span className="text-[10px] text-[var(--text-faint)] truncate">{ip.label}</span>
+                  {(ip.country || ip.label) && (
+                    <span className="text-[10px] text-[var(--text-faint)] truncate">
+                      {ip.country || ip.label}
+                    </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

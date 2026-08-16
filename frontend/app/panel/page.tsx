@@ -10,7 +10,7 @@ import {
   Radar,
   Copy,
   Crosshair,
-  Smartphone,
+  Sparkles,
 } from 'lucide-react';
 import { api, asList } from '@/lib/api';
 import { CardHeader, ProgressBar, Button, PageHeader } from '@/components';
@@ -18,7 +18,7 @@ import { PanelLink } from '@/components/panel-link';
 import { useI18n } from '@/lib/i18n';
 import { getPanelPrefix, secureSubUrl } from '@/lib/paths';
 import { toast } from 'sonner';
-import { BentoCell, DashboardBentoLayout } from '@/components/twa/dashboard-bento-layout';
+import { BentoCell, DashboardBentoLayout } from '@/components/layout/dashboard-bento-layout';
 
 interface SystemStatus {
   uptime: string;
@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [users, setUsers] = useState<{ total: number; active: number }>({ total: 0, active: 0 });
   const [subHint, setSubHint] = useState('');
+  const [recommendBusy, setRecommendBusy] = useState(false);
 
   useEffect(() => {
     api.get('/api/health').then((d) => setStatus(d)).catch(() => {});
@@ -70,6 +71,36 @@ export default function DashboardPage() {
   const month = status?.traffic?.month;
   const activePct = users.total ? Math.round((users.active / users.total) * 100) : 0;
 
+  const buildRecommendedSub = async () => {
+    setRecommendBusy(true);
+    try {
+      const res = await api.post('/api/cleanip/recommend', {
+        count: 48,
+        countries: ['DE', 'NL', 'FI', 'SE', 'TR'],
+        apply: true,
+      });
+      if (res.success === false) {
+        toast.error(res.message || 'ساخت ساب پیشنهادی ناموفق');
+        return;
+      }
+      const sub = res?.data?.subscriptionUrl || '';
+      if (sub) {
+        setSubHint(sub);
+        try {
+          await navigator.clipboard.writeText(sub);
+        } catch {
+          /* ignore */
+        }
+        toast.success('ساب پیشنهادی آماده و کپی شد');
+      } else {
+        toast.success(res?.data?.message || 'استخر Clean IP به‌روز شد');
+      }
+    } catch {
+      toast.error('خطا در ساخت ساب پیشنهادی');
+    }
+    setRecommendBusy(false);
+  };
+
   return (
     <div className="page-shell space-y-6">
       <PageHeader
@@ -88,11 +119,15 @@ export default function DashboardPage() {
                 <Crosshair size={14} /> Admin
               </Button>
             </PanelLink>
-            <a href="/twa/user?ref=owner_demo" target="_blank" rel="noreferrer">
+            <Button size="sm" variant="secondary" onClick={buildRecommendedSub} disabled={recommendBusy}>
+              <Sparkles size={14} />
+              {recommendBusy ? '…' : 'ساب پیشنهادی'}
+            </Button>
+            <PanelLink href="/panel/lab">
               <Button size="sm" variant="secondary">
-                <Smartphone size={14} /> Mini App
+                Lab
               </Button>
-            </a>
+            </PanelLink>
             <PanelLink href="/panel/cleanip">
               <Button size="sm">
                 <Radar size={14} /> {t('scanClean')}
@@ -107,7 +142,7 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="chip chip-live">v{status?.version || '5.1.1'}</span>
+                <span className="chip chip-live">v{status?.version || '1.9.12'}</span>
                 <span className={status?.configured ? 'chip chip-live' : 'chip chip-warn'}>
                   {status?.configured ? t('active') : 'Setup pending'}
                 </span>
@@ -116,7 +151,7 @@ export default function DashboardPage() {
                 XrayMOD control plane
               </h2>
               <p className="text-sm text-[var(--text-muted)] max-w-md">
-                SECURE PATH · silent 404 · Admin Dashboard · Telegram Mini App
+                SECURE PATH · silent 404 · Admin Dashboard
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -147,7 +182,7 @@ export default function DashboardPage() {
             {status?.configured ? t('active') : 'Setup'}
           </p>
           <p className="text-[12px] text-[var(--text-muted)] mt-1 font-mono">
-            {status?.version || '5.1.1'}
+            {status?.version || '1.9.12'}
           </p>
         </BentoCell>
         <BentoCell span={3}>

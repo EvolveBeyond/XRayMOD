@@ -1,4 +1,15 @@
-"""Deploy logic for XRayMOD panel."""
+"""Deploy logic for XRayMOD panel.
+
+NOTE: This module is superseded by installer/cli_deploy.py (the production
+path used by install.sh / install.ps1 / install.cmd). It is retained because
+installer/pipeline.py and the legacy GUI (installer/app.py) still import
+``fetch_worker_code`` / ``generate_password``. Deploying through this module
+is not the supported flow; prefer cli_deploy.main() for new installs.
+
+The cf_api functions used here take a CFClient and a caller-supplied
+authoritative account_id. If you touch this module, keep that contract —
+never pass a raw token where a CFClient is required.
+"""
 from __future__ import annotations
 
 import secrets
@@ -56,15 +67,24 @@ def generate_password(length: int = 16) -> str:
     return "".join(secrets.choice(chars) for _ in range(length))
 
 
-def deploy_cf(token: str, worker_name: str, d1_name: str, admin_password: str) -> dict:
-    account = cf_api.verify_token(token)
-    account_id = account["id"]
+def deploy_cf(token: str, worker_name: str, d1_name: str, admin_password: str,
+              account_id: str | None = None) -> dict:
+    """Deploy to a Cloudflare account.
 
-    d1_id = cf_api.create_d1(token, account_id, d1_name)
+    ``account_id`` is authoritative when provided; it is never re-discovered
+    inside this function (the first-account shortcut is not used).
+    """
+    account = cf_api.verify_token(token, account_id=account_id)
+    account_id = account["id"]
+    assert account_id, "account_id must not be empty"
+
+    cf = cf_api.CFClient(token)
+    d1 = cf_api.create_d1(cf, account_id, d1_name)
+    d1_id = d1["id"]
     worker_code = fetch_worker_code()
-    cf_api.deploy_worker(token, account_id, worker_name, worker_code, d1_id, admin_password)
-    cf_api.enable_worker_subdomain(token, account_id, worker_name)
-    worker_url = cf_api.get_worker_url(token, account_id, worker_name)
+    cf_api.deploy_worker(cf, account_id, worker_name, worker_code, d1_id)
+    cf_api.enable_subdomain(cf, account_id, worker_name)
+    worker_url = cf_api.get_worker_url(cf, account_id, worker_name)
 
     # Never persist Cloudflare API tokens on disk
     save({
@@ -72,6 +92,7 @@ def deploy_cf(token: str, worker_name: str, d1_name: str, admin_password: str) -
         "d1_name": d1_name,
         "d1_id": d1_id,
         "worker_url": worker_url,
+        "account_id": account_id,
         "mode": "cloudflare",
     })
 

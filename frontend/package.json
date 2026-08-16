@@ -1,6 +1,6 @@
 {
   "name": "xraymod-frontend",
-  "version": "5.1.1",
+  "version": "1.9.12",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,26 +9,26 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "^15.0.0",
+    "next": "^16.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "lucide-react": "^0.546.0",
+    "react-dom": "^19.2.8",
+    "lucide-react": "^1.30.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.5.0",
     "sonner": "^2.0.7",
-    "motion": "^12.23.24",
+    "motion": "^13.0.0",
     "qrcode.react": "^4.2.0"
   },
   "devDependencies": {
     "typescript": "~5.8.0",
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "tailwindcss": "^4.1.14",
-    "@tailwindcss/postcss": "^4.1.14",
-    "postcss": "^8.5.0",
-    "eslint": "^9.0.0",
-    "eslint-config-next": "^15.0.0"
+    "@types/react-dom": "^19.2.4",
+    "tailwindcss": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.26",
+    "eslint": "^10.8.1",
+    "eslint-config-next": "^16.3.0"
   }
 }

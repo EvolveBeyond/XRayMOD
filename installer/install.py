@@ -66,6 +66,21 @@ def _cf(token: str, path: str, method: str = "GET", body: dict | None = None) ->
     return data
 
 
+def _account_id(token: str) -> str:
+    """Return the account_id for a given token, verified by the first account.
+
+    For multi-account users, the caller must pick the correct account first;
+    this helper does not re-discover it — it uses whatever account_id is
+    provided via the config.
+    """
+    accounts = _cf(token, "/accounts?per_page=5")
+    results = accounts.get("result") or []
+    if not results:
+        raise RuntimeError("No Cloudflare accounts found for this token")
+    account = results[0]
+    return account["id"]
+
+
 def _input(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     val = input(f"  {prompt}{suffix}: ").strip()
@@ -96,13 +111,10 @@ def deploy(
     worker_name: str,
     d1_name: str,
     admin_password: str,
+    account_id: str,
 ) -> dict:
-    # Step 1: Get account ID
-    print("\n[1/5] Finding Cloudflare account...")
-    accounts = _cf(token, "/accounts?per_page=1")
-    account = accounts["result"][0]
-    account_id = account["id"]
-    print(f"  ✓ Account: {account['name']} ({account_id})")
+    # Step 1: account_id is authoritative — supplied by the caller
+    print(f"\n[1/6] Deploying to account: {account_id}")
 
     # Step 2: Create or find D1 database
     print("\n[2/6] Setting up D1 database...")
@@ -259,34 +271,39 @@ def deploy(
 
     # Step 6: Enable workers.dev subdomain
     print("\n[6/6] Enabling workers.dev subdomain...")
-    subdomain = "workers.dev"
+    custom_sub = ""
     try:
         sub = _cf(token, f"/accounts/{account_id}/workers/subdomain")
-        # API returns just the custom part (e.g. "rhpcir"), need to append ".workers.dev"
         custom_sub = sub["result"].get("subdomain") or sub["result"].get("name") or ""
-        if custom_sub:
-            subdomain = f"{custom_sub}.workers.dev"
     except RuntimeError:
+        # No subdomain yet — create one
         for method in ("PUT", "POST", "PATCH"):
             try:
                 sub = _cf(token, f"/accounts/{account_id}/workers/subdomain", method, {"subdomain": f"xraymod-{secrets.token_hex(4)}"})
                 custom_sub = sub["result"].get("subdomain") or ""
                 if custom_sub:
-                    subdomain = f"{custom_sub}.workers.dev"
-                break
+                    break
             except RuntimeError:
                 continue
 
+    if not custom_sub:
+        raise RuntimeError("workers.dev subdomain could not be resolved or created")
+
+    subdomain = f"{custom_sub}.workers.dev"
+    print(f"  ✓ workers.dev subdomain: {subdomain}")
+
     # Enable the worker on the subdomain
+    last_err = None
     for method in ("POST", "PUT", "PATCH"):
         try:
             _cf(token, f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", method, {"enabled": True})
             print(f"  ✓ Subdomain enabled: {subdomain}")
             break
-        except RuntimeError:
-            continue
+        except RuntimeError as e:
+            last_err = e
     else:
-        print(f"  ⚠ Subdomain will be available shortly at: {subdomain}")
+        # All attempts failed — surface the error, don't fabricate success
+        raise RuntimeError(f"Could not enable workers.dev on {worker_name}: {last_err}")
 
     worker_url = f"https://{worker_name}.{subdomain}"
 
@@ -316,7 +333,7 @@ def main() -> None:
     print("This will deploy or update the XrayMOD panel on your Cloudflare account.")
     print()
 
-    # Step 1: API Token
+    # Step 1: API Token — offer account selection
     if prev_token:
         print(f"  Found previous API token: {prev_token[:8]}...")
         use_prev = _input("Use this token? [Y/n]", "y").lower()
@@ -355,18 +372,54 @@ def main() -> None:
         print("\n  Error: Token is required.")
         sys.exit(1)
 
-    # Verify token
-    print("\n  Verifying token...")
+    # Step 2: Account selection (multi-account support)
+    print()
+    print("  ╔════════════════════════════════════════════════╗")
+    print("  ║  Cloudflare Account Selection                    ║")
+    print("  ╚════════════════════════════════════════════════╝")
+    print("  Enter 'a' for account selection, 'n' to use the first account:")
+
+    # Get all accounts to show them
+    results: list[dict] = []
     try:
-        accounts = _cf(token, "/accounts?per_page=1")
-        account_name = accounts["result"][0]["name"]
-        print(f"  ✓ Token valid — Account: {account_name}")
+        accounts = _cf(token, "/accounts?per_page=5")
+        results = accounts.get("result") or []
+        if not results:
+            raise RuntimeError("No Cloudflare accounts found for this token")
+        print()
+        print("  Available accounts:")
+        for i, a in enumerate(results, 1):
+            print(f"    {i}) {a.get('name')}  (id: {a.get('id')})")
+
+        chosen = _input("Select account (enter number, 'n' for first, 'a' for all):", "n").lower()
+
+        if chosen == "a":
+            # All accounts — let user pick one
+            print("  Enter account number (1-5):")
+            idx = _input("")
+            try:
+                account = results[int(idx) - 1]
+            except (ValueError, IndexError):
+                account = results[0]
+        elif chosen == "n":
+            account = results[0]
+        else:
+            account = results[int(chosen) - 1]
+    except (ValueError, IndexError):
+        account = results[0] if results else {"id": "", "name": ""}
     except RuntimeError as e:
         print(f"\n  ❌ Token verification failed: {e}")
         print("  Make sure the token has these permissions:")
         print("    - Account > Workers Scripts > Edit")
         print("    - Account > D1 > Edit")
         sys.exit(1)
+
+    account_id = account["id"]
+    if not account_id:
+        print("\n  Error: No account selected.")
+        sys.exit(1)
+    account_name = account.get("name", account_id)
+    print(f"  ✓ Selected account: {account_name} ({account_id})")
 
     # Step 2: Worker name — completely random, no product name
     if prev_worker:
@@ -397,7 +450,7 @@ def main() -> None:
         sys.exit(0)
 
     try:
-        result = deploy(token, worker_name, d1_name, admin_password)
+        result = deploy(token, worker_name, d1_name, admin_password, account_id)
     except Exception as e:
         print(f"\n  ❌ Deployment failed: {e}")
         sys.exit(1)

@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { hashPasswordFast } from './auth';
+import { XRayMOD_SCHEMA_VERSION, XRayMOD_VERSION } from './lib/version';
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -240,11 +241,6 @@ const DEFAULT_SETTINGS = {
   'panel.secret_key': '',
   'panel.admin_uuid': '',
   'panel.access_uuid': '',
-  'financial.referral_commission': '15',
-  'financial.min_withdrawal': '5',
-  'financial.tax_fee': '2',
-  'integrations.telegram_enabled': 'false',
-  'integrations.ton_wallet_enabled': 'false',
   'integrations.external_server_url': '',
   'disguise.enabled': 'true',
   'disguise.admin_path': '',
@@ -255,20 +251,28 @@ const DEFAULT_SETTINGS = {
   'panel.cf_email': '',
   'panel.cf_email_enforce': 'false',
   'panel.custom_domains': '',
-  'panel.version': '5.1.1',
+  'panel.version': XRayMOD_VERSION,
   'ech.enabled': 'false',
   'ech.sni': 'cloudflare-ech.com',
   'ech.dns': 'https://dns.alidns.com/dns-query',
   'tls_fragment.enabled': 'false',
   'tls_fragment.mode': 'Shadowrocket',
-  'tg.bot_token': '',
-  'tg.chat_id': '',
   'panel.started_at': '',
   'panel.paused': 'false',
   'protocol.mixed_mode': 'false',
   'panel.monthly_cap_gb': '0',
   'panel.sub_html_enhanced': 'true',
   'panel.isp_aware_sub': 'true',
+  'cleanip.auto_enabled': 'true',
+  'cleanip.health_enabled': 'true',
+  'panel.speed_profile': 'stable',
+  'panel.sub_name': 'XRayMOD',
+  'panel.sub_banner': 'Secure edge · Clean IP · Smart sub',
+  'canary.blocked_ips': '[]',
+  'canary.report': '{"hits":[],"blocked":[]}',
+  'brand.config': '',
+  'panel.nodes_json': '[]',
+  'panel.custom_domains_weighted': '[]',
 };
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
@@ -332,6 +336,18 @@ const TABLES = [
     status TEXT DEFAULT 'pending',
     created_at INTEGER
   )`,
+  `CREATE TABLE IF NOT EXISTS remote_api_keys (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    scopes_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    created_at INTEGER NOT NULL,
+    revoked_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_remote_api_keys_status ON remote_api_keys(status)`,
 ];
 
 /** Per-isolate cache — avoid re-running heavy DDL/seed on every request */
@@ -367,7 +383,12 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
     .prepare('SELECT v FROM kvstore WHERE k = ?')
     .bind('schema.version')
     .first<{ v: string }>();
-  if (version?.v === '2' || version?.v === '3' || version?.v === '4') {
+  if (
+    version?.v === '2' ||
+    version?.v === '3' ||
+    version?.v === '4' ||
+    version?.v === '5'
+  ) {
     const nowSoft = Date.now();
     for (const k of [
       'disguise.canary_paths',
@@ -385,7 +406,7 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .bind(k, def, nowSoft)
         .run();
     }
-    // Gen 5.1.1: harden existing panels once
+    // Gen 1.9.12: harden existing panels once
     if (version.v !== '4') {
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
@@ -397,11 +418,11 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .run();
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-        .bind('panel.version', '5.1.1', nowSoft)
+        .bind('panel.version', XRayMOD_VERSION, nowSoft)
         .run();
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-        .bind('schema.version', '4', nowSoft)
+        .bind('schema.version', XRayMOD_SCHEMA_VERSION, nowSoft)
         .run();
     }
     return;
@@ -483,6 +504,6 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
 
   await db
     .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-    .bind('schema.version', '4', now)
+    .bind('schema.version', XRayMOD_SCHEMA_VERSION, now)
     .run();
 }

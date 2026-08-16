@@ -7,7 +7,7 @@ const LOGIN_RATE_WINDOW = 60000;
 const PBKDF2_ITERATIONS = 12_000;
 const SALT_BYTES = 16;
 
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const ba = enc.encode(a);
   const bb = enc.encode(b);
@@ -87,7 +87,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
       ['deriveBits']
     );
     const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' },
       key,
       256
     );
@@ -138,7 +138,7 @@ async function hotp(secret: Uint8Array, counter: number): Promise<string> {
 
   const key = await crypto.subtle.importKey(
     'raw',
-    secret,
+    secret as BufferSource,
     { name: 'HMAC', hash: 'SHA-1' },
     false,
     ['sign']

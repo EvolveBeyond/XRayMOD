@@ -42,7 +42,7 @@ npm run dev            # build UI + wrangler dev --local
 npm run dev:worker
 ```
 
-After first `POST /install`, all APIs live under `/{SECURE_PATH}/api/…` (Gen 5.1.1).  
+After first `POST /install`, all APIs live under `/{SECURE_PATH}/api/…` (Gen 1.9.12).
 Bare `/api/*` returns 404 once the panel is configured.
 
 ### Tests

@@ -175,12 +175,12 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
 
       <form id="f" autocomplete="on">
         <div class="field">
-          <label for="user">ایمیل Cloudflare / نام کاربری</label>
-          <input id="user" name="username" type="text" value="" autocomplete="username" required placeholder="you@example.com" />
+          <label for="user">نام کاربری / ایمیل</label>
+          <input id="user" name="username" type="text" value="" autocomplete="username" required placeholder="admin" dir="ltr" />
         </div>
         <div class="field">
           <label for="pass">رمز عبور</label>
-          <input id="pass" class="has-toggle" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
+          <input id="pass" class="has-toggle" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" dir="ltr" />
           <button type="button" class="toggle" id="eye" aria-label="toggle">نمایش</button>
         </div>
         <div class="field" id="totpWrap" style="display:none">
@@ -211,8 +211,8 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
   var challenge = null;
   var lang = localStorage.getItem('xraymod_lang') || 'fa';
   var i18n = {
-    fa: { title: 'ورود امن به داشبورد', user: 'ایمیل Cloudflare / نام کاربری', pass: 'رمز عبور', go: 'ورود به پنل', show: 'نمایش', hide: 'مخفی', bad: 'نام کاربری یا رمز اشتباه است', net: 'خطای شبکه — دوباره تلاش کنید', ok: 'موفق — در حال انتقال...' },
-    en: { title: 'Secure panel sign-in', user: 'Cloudflare email / username', pass: 'Password', go: 'Sign in', show: 'Show', hide: 'Hide', bad: 'Invalid username or password', net: 'Network error — try again', ok: 'OK — redirecting...' }
+    fa: { title: 'ورود امن به داشبورد', user: 'نام کاربری / ایمیل', pass: 'رمز عبور', go: 'ورود به پنل', show: 'نمایش', hide: 'مخفی', bad: 'نام کاربری یا رمز اشتباه است', net: 'خطای شبکه — دوباره تلاش کنید', ok: 'موفق — در حال انتقال...' },
+    en: { title: 'Secure panel sign-in', user: 'Username / email', pass: 'Password', go: 'Sign in', show: 'Show', hide: 'Hide', bad: 'Invalid username or password', net: 'Network error — try again', ok: 'OK — redirecting...' }
   };
   function setLangBtn() {
     document.getElementById('langFa').className = 'lang' + (lang==='fa' ? ' on' : '');

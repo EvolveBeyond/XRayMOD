@@ -59,7 +59,8 @@ def create_d1(state: dict) -> dict:
     d1_name = state.get("d1_name", f"{state.get('worker_name', 'cf-worker')}-db")
 
     try:
-        d1_id = cf_api.create_d1(token, account_id, d1_name)
+        cf = cf_api.CFClient(token)
+        d1_id = cf_api.create_d1(cf, account_id, d1_name)["id"]
         return {**state, "d1_id": d1_id, "d1_name": d1_name}
     except Exception as e:
         return {**state, "error": f"D1 creation failed: {e}"}
@@ -89,9 +90,10 @@ def deploy_worker(state: dict) -> dict:
     admin_password = state.get("admin_password") or generate_password()
 
     try:
-        cf_api.deploy_worker(token, account_id, worker_name, state["worker_code"], d1_id, admin_password)
-        cf_api.enable_worker_subdomain(token, account_id, worker_name)
-        worker_url = cf_api.get_worker_url(token, account_id, worker_name)
+        cf = cf_api.CFClient(token)
+        cf_api.deploy_worker(cf, account_id, worker_name, state["worker_code"], d1_id)
+        cf_api.enable_subdomain(cf, account_id, worker_name)
+        worker_url = cf_api.get_worker_url(cf, account_id, worker_name)
 
         return {
             **state,

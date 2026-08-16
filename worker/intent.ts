@@ -15,7 +15,6 @@ export type Intent =
   | { type: 'api'; resource: string; action?: string }
   | { type: 'subscription'; token: string }
   | { type: 'install' }
-  | { type: 'telegram'; endpoint: 'webhook' | 'login' }
   | { type: 'static'; path: string }
   | { type: 'unknown'; path: string };
 
@@ -43,21 +42,13 @@ export function detectIntent(request: Request, url: URL, env: Env): Intent {
     return { type: 'install' };
   }
 
-  // 4. Telegram endpoints
-  if (pathname === '/bot') {
-    return { type: 'telegram', endpoint: 'webhook' };
-  }
-  if (pathname === '/admin') {
-    return { type: 'telegram', endpoint: 'login' };
-  }
-
-  // 5. Subscription links
+  // 4. Subscription links
   const subMatch = pathname.match(/^\/sub\/([^/]+)/);
   if (subMatch) {
     return { type: 'subscription', token: subMatch[1] };
   }
 
-  // 6. API routes
+  // 5. API routes
   if (pathname.startsWith('/api/')) {
     const segments = pathname.split('/').filter(Boolean);
     const resource = segments[1] || '';
@@ -65,7 +56,7 @@ export function detectIntent(request: Request, url: URL, env: Env): Intent {
     return { type: 'api', resource, action };
   }
 
-  // 7. Static / SPA
+  // 6. Static / SPA
   if (!pathname.startsWith('/api/') && !pathname.startsWith('/sub/')) {
     return { type: 'static', path: pathname };
   }
@@ -86,7 +77,6 @@ const processors: Record<Intent['type'], Processor[]> = {
   api: [],
   subscription: [],
   install: [],
-  telegram: [],
   static: [],
   unknown: [],
 };

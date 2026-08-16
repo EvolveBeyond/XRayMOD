@@ -112,15 +112,14 @@ Modified `worker/router.ts`:
 - Proxy traffic (WS, gRPC, XHTTP) always local
 
 ### Worker ↔ Backend Communication
-```
-CF Worker                          VPS Backend
-    │                                   │
-    ├─── API request ─────────────────→│ (HMAC signed)
-    │                                   │
-    ├─── Proxy Traffic ──→ Internet     │
-    │    (always local)                 │
-    │                                   │
-    └─── heartbeat ───────────────────→│ (every 30s)
+```mermaid
+sequenceDiagram
+    participant Worker as CF Worker
+    participant Backend as VPS Backend
+
+    Worker->>Backend: API Request (HMAC signed)
+    Worker->>Internet: Proxy Traffic (always local)
+    Worker->>Backend: Heartbeat (every 30s)
 ```
 
 ---
@@ -220,8 +219,11 @@ frontend/
 - Prevents fingerprinting across nodes
 
 ### Router Pipeline (Fixed)
-```
-Disguise remap → UUID check → Route matching → Disguise fallback
+```mermaid
+graph LR
+    DisguiseRemap[Disguise remap] --> UUIDCheck[UUID check]
+    UUIDCheck --> RouteMatching[Route matching]
+    RouteMatching --> DisguiseFallback[Disguise fallback]
 ```
 - Secret paths (/x-admin) remap BEFORE UUID check
 - UUID strips prefix, second disguise check catches /admin decoy

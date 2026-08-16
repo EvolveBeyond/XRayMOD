@@ -1,6 +1,7 @@
 import type { Env } from '../types';
 import { hashPassword } from '../auth';
 import { buildVlessWsLink } from './links';
+import { XRayMOD_VERSION } from './version';
 
 function genPassword(len = 14): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$';
@@ -167,7 +168,7 @@ export async function bootstrapPanel(
   await env.DB.prepare(
     'INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)'
   )
-    .bind('panel.version', '5.1.1', now)
+    .bind('panel.version', XRayMOD_VERSION, now)
     .run();
 
   // Optional CF email from install username if it looks like an email

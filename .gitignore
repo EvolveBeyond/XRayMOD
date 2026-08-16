@@ -12,8 +12,12 @@ frontend/.next/
 frontend/tsconfig.tsbuildinfo
 .wrangler/
 .wrangler-dist/
+.wrangler-deploy.*.toml
+.rolling/
 dist-worker/
 worker.js
+index.js
+build-worker.mjs
 *.map
 
 # Local / personal installer state (never commit)

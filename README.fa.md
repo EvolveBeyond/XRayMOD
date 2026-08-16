@@ -54,12 +54,19 @@
 |:--:|:-------|:------------|
 | 🥷 | **SECURE PATH اجباری** | پنل / API / ساب / پورتال فقط زیر UUID |
 | 🛡 | **داشبورد ادمین** | کاربر، آپدیت، دامنه سفارشی، kill switch، ایمیل CF |
-| 📊 | **صفحه وضعیت کاربر** | حجم، روز باقی‌مانده، QR — بدون لاگین ادمین |
-| 🎯 | **ساب هوشمند** | مستقیم + IP تمیز + پورت‌های CF · فرمت Clash / sing-box |
-| 🥷 | **استیلث** | ۴۰۴ خاموش · CF 1101 · nginx · GitHub · WordPress |
-| 🕳 | **Canary** | مسیر جعلی برای لاگ اسکنر بدون لو رفتن پنل |
-| 💾 | **بک‌آپ و Audit** | خروجی/ورودی تنظیمات · تاریخچه اکشن ادمین |
-| 📡 | **Clean IP آگاه از ISP** | پیشنهاد بهتر وقتی داده موجود باشد |
+| 🧪 | **لَب پیشرفته** | سرعت، ساب هوشمند، وایت‌لیبل، استیلث، اپس در یک UI |
+| 🌙 | **Auto Clean-IP شبانه** | کرون Top-N برای هر ISP (ایرانسل/همراه/…) |
+| ❤️ | **Health-check لبه** | حذف آی‌پی‌های مرده از ساب |
+| 🎮 | **پروفایل سرعت** | گیمینگ / یوتیوب / پایدار |
+| 🎟 | **ساب مهمان ۲۴ساعته + QR** | لینک موقت با انقضا |
+| 🇮🇷 | **Split Routing** | ایران DIRECT در Clash Meta / sing-box |
+| 🔁 | **Failover** | تگ اولویت `[P1]` `[P2]` روی کانفیگ‌ها |
+| 🎨 | **وایت‌لیبل** | برند، رنگ، دامنه، بنر ساب |
+| 🕳 | **Canary حرفه‌ای** | لاگ ASN/IP اسکنر + بلاک یک‌کلیکی |
+| 🧩 | **پریست Fragment / Reality** | ضد فیلتر یک‌کلیک |
+| 💾 | **بکاپ / ریستور + Rollback** | یک فایل JSON · برگشت نسخه Worker |
+| 🕸 | **دامنه وزنی + Multi-node** | چرخش دامنه · چند Worker |
+| 📡 | **پرچم کشور روی کانفیگ** | 🇩🇪 🇳🇱 🇹🇷 کنار اسم هر نود |
 | 🔐 | **سخت‌سازی ادمین** | ایمیل CF · 2FA · rate limit |
 | ⚡ | **نصب یک‌خطی** | ویندوز / لینوکس / مک / WSL |
 | 📱 | **کلاینت‌ها** | v2rayNG ≥۲.۲.۳ · sing-box ≥۱.۱۲ · Hiddify · Streisand · Clash |
@@ -94,7 +101,7 @@
 1. وارد [داشبورد Cloudflare](https://dash.cloudflare.com) شوید.
 2. از گوشه بالا راست روی آواتار → **My Profile** → **API Tokens**.  
    لینک مستقیم: [https://dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
-3. روی **Create Token** بزنید.
+3. روی **Create Token** بزدید.
 4. در بخش قالب‌ها، **Edit Cloudflare Workers** را انتخاب کنید → **Use template**.  
    این قالب پیشنهادی رسمی برای شروع با XRayMOD است.
 5. تنظیمات را مرور کنید (در صورت تمایل محدودتر کنید):
@@ -149,7 +156,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/
 
 ### ۲) فقط سه ورودی بدهید
 
-| مرحله | ورودی | نکته |
+| مرحله | ورودی | نکنه |
 |:-----:|:------|:-----|
 | ۱ | 🔑 توکن Cloudflare | طبق بخش بالا |
 | ۲ | 👤 نام کاربری ادمین | بعداً بهتر است ایمیل CF را در پنل ببندید |
@@ -168,7 +175,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/
 | `…/sub/<UUID>?format=clash` | خروجی Clash / Mihomo |
 | `…/sub/<UUID>?format=singbox` | خروجی sing-box |
 
-> ⚠️ از نسل ۵.۱.۱ به بعد، مسیرهای برهنه مثل `/panel` یا `/sub/...` **بدون** SECURE PATH همه **۴۰۴** هستند. همیشه UUID مسیر را در لینک داشته باشید. جزئیات: [CHANGELOG-5.1.1.md](CHANGELOG-5.1.1.md)
+> ⚠️ از نسل ۱.۹.۱۲ به بعد، مسیرهای برهنه مثل `/panel` یا `/sub/...` **بدون** SECURE PATH همه **۴۰۴** هستند. همیشه UUID مسیر را در لینک داشته باشید. جزئیات: [CHANGELOG-1.9.12.md](CHANGELOG-1.9.12.md)
 
 ---
 
@@ -234,14 +241,15 @@ https://WORKER.workers.dev/<SECURE_PATH>/me/<USER_UUID>
 
 ## معماری خلاصه
 
-```text
-اینترنت → لبه Cloudflare (Worker)
-              ├─ دروازه SECURE PATH (۴۰۴ خاموش)
-              ├─ پوسته‌های جعلی / استاتیک
-              ├─ API ادمین + داشبورد
-              ├─ اندپوینت سابسکرایبشن
-              ├─ پورتال /{SECURE}/me
-              └─ D1 (کاربر، تنظیمات، audit)
+```mermaid
+graph TD
+    Internet[اینترنت] --> Edge[لبه Cloudflare Worker]
+    Edge --> Gate[دروازه SECURE PATH ۴۰۴ خاموش]
+    Edge --> Disguise[پوسته‌های جعلی \/ استاتیک]
+    Edge --> Admin[API ادمین + داشبورد]
+    Edge --> Sub[اندپوینت سابسکرایبشن]
+    Edge --> Portal["پورتال \/{SECURE}\/me"]
+    Edge --> D1[(D1 دیتابیس - کاربر، تنظیمات، audit)]
 ```
 
 | مسیر | نقش |
@@ -249,7 +257,6 @@ https://WORKER.workers.dev/<SECURE_PATH>/me/<USER_UUID>
 | `worker/` | **منبع حقیقت تولید** — روتینگ، احراز هویت، ساب، پورتال |
 | `frontend/` | UI پنل ادمین |
 | `installer/` + `install.*` | نصب روی اکانت Cloudflare |
-| `telegram-bot/` | ربات اختیاری برای ساخت/حذف/آپدیت چند پنل |
 | `backend/` | آزمایش‌های قدیمی پایتون — برای دیپلوی Workers لازم نیست |
 
 ---
@@ -277,7 +284,7 @@ https://WORKER.workers.dev/<SECURE_PATH>/me/<USER_UUID>
 <details>
 <summary><b>چرا روی /panel خطای ۴۰۴ می‌گیرم؟</b></summary>
 
-نسل ۵.۱.۱ پیشوند UUID (SECURE PATH) را اجباری کرده. لینک کامل چاپ‌شده توسط نصب‌کننده را استفاده کنید.
+نسل ۱.۹.۱۲ پیشوند UUID (SECURE PATH) را اجباری کرده. لینک کامل چاپ‌شده توسط نصب‌کننده را استفاده کنید.
 </details>
 
 <details>

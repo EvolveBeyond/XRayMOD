@@ -1,4 +1,0 @@
-# XrayMOD Telegram Bot — panel factory
-python-telegram-bot[job-queue]==21.10
-httpx==0.28.1
-python-dotenv==1.0.1

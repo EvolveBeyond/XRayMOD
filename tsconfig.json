@@ -27,13 +27,13 @@
     ]
   },
   "include": [
-    "src/**/*",
     "worker/**/*"
   ],
   "exclude": [
     "worker/processors/**/*",
     "node_modules",
     "dist",
-    "frontend"
+    "frontend",
+    "src"
   ]
 }

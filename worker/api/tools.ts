@@ -30,12 +30,10 @@ function isSecretKey(k: string): boolean {
 
 const IMPORT_ALLOW = [
   'panel.',
-  'financial.',
   'integrations.',
   'disguise.',
   'ech.',
   'tls_fragment.',
-  'tg.',
   'wizard.',
   'protocol.',
   'cleanip.',

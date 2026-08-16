@@ -25,7 +25,7 @@ irm https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/install.ps1 | 
 
 → پنل ساخته می‌شود و لینک‌های **SECURE PATH** چاپ می‌شود (`/{UUID}/panel` ، `/{UUID}/sub/...`).
 
-نسخه فعلی هدف: **5.1.1** — جزئیات در [CHANGELOG.md](CHANGELOG.md).
+نسخه فعلی هدف: **1.9.12** — جزئیات در [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

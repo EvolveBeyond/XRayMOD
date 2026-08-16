@@ -1,6 +1,0 @@
-.venv/
-.env
-panels.db
-__pycache__/
-*.pyc
-.DS_Store

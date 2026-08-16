@@ -10,14 +10,28 @@ function json(data: any, status = 200): Response {
   });
 }
 
+type Authorizer = (request: Request, env: Env) => Promise<unknown>;
+
 export async function handleConfigs(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>
 ): Promise<Response> {
+  return handleConfigsAuthorized(request, env, ctx, params, async (req, authorizationEnv) =>
+    requireAdmin(req, authorizationEnv.DB)
+  );
+}
+
+export async function handleConfigsAuthorized(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+  authorize: Authorizer
+): Promise<Response> {
   try {
-    await requireAdmin(request, env.DB);
+    await authorize(request, env);
   } catch (e) {
     if (e instanceof Response) return e;
     return json({ success: false, message: 'Unauthorized' }, 401);

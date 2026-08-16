@@ -60,12 +60,19 @@ You get a practical admin UI, a user-facing status page, smart subscription bund
 |:--:|:--------|:-------|
 | 🥷 | **Compulsory SECURE PATH** | Panel / API / sub / portal only under a random UUID |
 | 🛡 | **Admin dashboard** | Users · update check · CF-email login · custom domains · kill switch |
-| 📊 | **User status portal** | Traffic, days left, QR — no admin login for end users |
-| 🎯 | **Smart subscription** | Direct + clean IPs + CF ports · Clash / sing-box formats |
-| 🥷 | **Stealth skins** | Silent 404 · CF 1101 · nginx · GitHub · WordPress · Access Denied |
-| 🕳 | **Canary traps** | Fake paths log scanners without exposing the panel |
-| 💾 | **Backup & audit** | Export/import · remote settings sync · admin action history |
-| 📡 | **ISP-aware clean IPs** | Better picks for constrained carriers when data is available |
+| 🧪 | **Advanced Lab UI** | Speed ops · smart sub · whitelabel · stealth · ops in one screen |
+| 🌙 | **Nightly Auto Clean-IP** | Cron refreshes Top-N country IPs per ISP (MTN/MCI/…) |
+| ❤️ | **Edge health-check** | Dead clean IPs probed and removed from the subscription |
+| 🎮 | **Speed profiles** | Gaming / YouTube / Stable — ports, fingerprints, country pools |
+| 🎟 | **Guest sub (24h) + QR** | Temporary share links that expire automatically |
+| 🇮🇷 | **Split routing** | Iran → DIRECT for Clash Meta / sing-box |
+| 🔁 | **Failover tags** | `[P1]` Direct → `[P2]` 🇩🇪 Germany … for client priority |
+| 🎨 | **Whitelabel** | Brand name, colors, domain, sub banner for resellers |
+| 🕳 | **Pro canary** | Scanner hits with ASN/IP · one-click block list |
+| 🧩 | **Fragment / Reality presets** | One-click anti-filter client hints |
+| 💾 | **Backup / Restore + rollback** | Single JSON backup · Worker version rollback |
+| 🕸 | **Weighted domains + multi-node** | Rotate custom domains · register multiple Workers |
+| 📡 | **Flagged clean IPs** | Country emoji on each subscription config name |
 | 🔐 | **Admin hardening** | CF email login · 2FA · rate limiting · SECURE PATH |
 | ⚡ | **One-line install** | Windows PowerShell/CMD · Linux · macOS · WSL |
 | 📱 | **Client-ready** | v2rayNG ≥2.2.3 · sing-box ≥1.12 · Hiddify · Streisand · Clash |
@@ -83,14 +90,15 @@ You get a practical admin UI, a user-facing status page, smart subscription bund
 | Installers | Bash · PowerShell |
 | Tooling | Wrangler · npm |
 
-```text
-Internet → Cloudflare Edge (Worker)
-              ├─ SECURE PATH gate (silent 404)
-              ├─ Disguise / static responses
-              ├─ Admin API + Admin Dashboard
-              ├─ Subscription endpoints
-              ├─ /{SECURE}/me user portal
-              └─ D1 (users, settings, audit)
+```mermaid
+graph TD
+    Internet --> Edge[Cloudflare Edge Worker]
+    Edge --> Gate[SECURE PATH gate - silent 404]
+    Edge --> Disguise[Disguise / static responses]
+    Edge --> Admin[Admin API + Admin Dashboard]
+    Edge --> Sub[Subscription endpoints]
+    Edge --> Portal["/{SECURE}/me user portal"]
+    Edge --> D1[(D1 Database - users, settings, audit)]
 ```
 
 ---
@@ -195,7 +203,7 @@ Everything else (Node tooling, clone, D1, UI build, Worker deploy, bootstrap) is
 | `…/sub/<USER_UUID>?format=clash` | Clash / Mihomo YAML |
 | `…/sub/<USER_UUID>?format=singbox` | sing-box JSON |
 
-> **Gen 5.1.1+:** Bare `/panel`, `/api/*`, `/sub/*` **without** the SECURE PATH return **404**. Always share links that include the UUID path. See [CHANGELOG-5.1.1.md](CHANGELOG-5.1.1.md).
+> **Gen 1.9.12+:** Bare `/panel`, `/api/*`, `/sub/*` **without** the SECURE PATH return **404**. Always share links that include the UUID path. See [CHANGELOG-1.9.12.md](CHANGELOG-1.9.12.md).
 
 ---
 
@@ -252,19 +260,17 @@ More detail: [DEPLOY.md](./DEPLOY.md).
 
 ### High-level
 
-```text
-                    ┌──────────────────────────┐
-   Clients          │   Cloudflare Network     │
-   (v2rayNG, etc.)  │                          │
-         │          │  Worker (router.ts)      │
-         │          │    ├ processors/         │
-         └─────────►│    ├ proxy/              │
-                    │    ├ api/                │
-   Admin browser ──►│    └ user-portal         │
-                    │            │             │
-                    │            ▼             │
-                    │         D1 SQLite        │
-                    └──────────────────────────┘
+```mermaid
+graph TD
+    Clients[Clients v2rayNG, etc.] --> Edge[Cloudflare Network Worker]
+    Admin[Admin browser] --> Edge
+    Edge --> Router[Worker router.ts]
+    Router --> Processors[processors/]
+    Router --> Proxy[proxy/]
+    Router --> API[api/]
+    Router --> Portal[user-portal]
+    Portal --> D1[(D1 SQLite)]
+    API --> D1
 ```
 
 ### Canonical source of truth
@@ -274,7 +280,6 @@ More detail: [DEPLOY.md](./DEPLOY.md).
 | `worker/` | **Production runtime** — routing, auth, sub, portal |
 | `frontend/` | Admin panel UI |
 | `installer/` + `install.*` | Bootstrap onto a Cloudflare account |
-| `telegram-bot/` | Optional multi-panel Telegram operator bot |
 | `docs/` | Human documentation and assets |
 | `backend/` | Legacy / optional Python experiments — **not** required for Workers deploy |
 
@@ -301,11 +306,11 @@ XRayMOD/
 │   └── router.ts           # Routing
 ├── frontend/               # Next.js admin UI
 ├── installer/              # Installer support code
-├── telegram-bot/           # Optional Telegram deploy bot
+├── wizard/                 # Advanced Wizard (canonical onboarding)
 ├── docs/                   # Documentation & assets
 ├── scripts/                # Smoke / e2e helpers
-├── install.sh              # Unix installer
-├── install.ps1             # Windows installer
+├── install.sh              # Unix installer (legacy compatibility)
+├── install.ps1             # Windows installer (legacy compatibility)
 ├── wrangler.toml           # Template bindings
 ├── SECURITY.md
 ├── CONTRIBUTING.md
@@ -400,7 +405,7 @@ Only on your machine during install, sent only to Cloudflare APIs. Never commit 
 <details>
 <summary><b>Why do I get 404 on /panel?</b></summary>
 
-Gen 5.1.1 requires the SECURE PATH UUID prefix. Use the full URL printed by the installer.
+Gen 1.9.12 requires the SECURE PATH UUID prefix. Use the full URL printed by the installer.
 </details>
 
 <details>

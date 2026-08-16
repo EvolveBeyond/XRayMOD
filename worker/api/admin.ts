@@ -5,10 +5,19 @@
 import type { Env } from '../types';
 import { requireAdmin, hashPassword } from '../auth';
 import { appendAudit, clientIp } from '../lib/audit';
+import {
+  readUpdateJob,
+  saveCfToken,
+  startSelfUpdate,
+} from '../lib/self-update';
+import { XRayMOD_VERSION } from '../lib/version';
+import { edgeProviderSummary } from '../lib/edge-provider';
 
-export const APP_VERSION = '5.1.1';
+export const APP_VERSION = XRayMOD_VERSION;
 const GITHUB_RELEASES =
   'https://api.github.com/repos/askarniroomand/XRayMOD/releases/latest';
+const GITHUB_COMMITS =
+  'https://api.github.com/repos/askarniroomand/XRayMOD/commits/main';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -74,6 +83,18 @@ export async function handleAdmin(
     const capBytes = capGB > 0 ? capGB * 1073741824 : 0;
     const usagePct = capBytes > 0 ? Math.min(100, Math.round((used / capBytes) * 100)) : 0;
 
+    const tokenRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.cf_api_token')
+      .first<{ v: string }>();
+    const accountRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.cf_account_id')
+      .first<{ v: string }>();
+    const edge = await edgeProviderSummary(
+      tokenRow?.v && accountRow?.v
+        ? { apiToken: tokenRow.v, accountId: accountRow.v }
+        : null
+    );
+
     return json({
       success: true,
       data: {
@@ -91,39 +112,79 @@ export async function handleAdmin(
         cf_email: cfEmail?.v || '',
         secure_path: access?.v || '',
         panel_entry: access?.v ? `/${access.v}/panel` : '',
+        edge_provider: edge,
       },
     });
   }
 
-  // GET /api/admin/update-check
+  // GET /api/admin/update-check — compare with GitHub main + latest release
   if (action === 'update-check' && request.method === 'GET') {
     try {
-      const res = await fetch(GITHUB_RELEASES, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'XRayMOD-Panel',
-        },
-      });
-      if (!res.ok) {
-        return json({
-          success: true,
-          current: APP_VERSION,
-          latest: APP_VERSION,
-          update_available: false,
-          message: 'Could not reach GitHub releases',
-        });
+      const [relRes, commitRes] = await Promise.all([
+        fetch(GITHUB_RELEASES, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'XRayMOD-Panel',
+          },
+        }),
+        fetch(GITHUB_COMMITS, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'XRayMOD-Panel',
+          },
+        }),
+      ]);
+
+      let latest = APP_VERSION;
+      let release_url = '';
+      let notes = '';
+      if (relRes.ok) {
+        const data = (await relRes.json()) as {
+          tag_name?: string;
+          html_url?: string;
+          body?: string;
+        };
+        latest = (data.tag_name || '').replace(/^v/i, '') || APP_VERSION;
+        release_url = data.html_url || '';
+        notes = (data.body || '').slice(0, 2000);
       }
-      const data = (await res.json()) as { tag_name?: string; html_url?: string; body?: string };
-      const latest = (data.tag_name || '').replace(/^v/i, '');
-      const update_available = !!latest && latest !== APP_VERSION && compareSemver(latest, APP_VERSION) > 0;
+
+      let main_sha = '';
+      let main_message = '';
+      if (commitRes.ok) {
+        const c = (await commitRes.json()) as {
+          sha?: string;
+          commit?: { message?: string };
+        };
+        main_sha = (c.sha || '').slice(0, 12);
+        main_message = (c.commit?.message || '').split('\n')[0];
+      }
+
+      const last = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+        .bind('panel.last_update_commit')
+        .first<{ v: string }>();
+      const tokenRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+        .bind('panel.cf_api_token')
+        .first<{ v: string }>();
+      const has_token = !!(tokenRow?.v && tokenRow.v.length > 20);
+
+      const update_available =
+        (!!latest && latest !== APP_VERSION && compareSemver(latest, APP_VERSION) > 0) ||
+        (!!main_sha && !!last?.v && main_sha !== last.v.slice(0, 12)) ||
+        (!!main_sha && !last?.v);
+
       return json({
         success: true,
         current: APP_VERSION,
         latest: latest || APP_VERSION,
         update_available,
-        release_url: data.html_url || '',
-        notes: (data.body || '').slice(0, 2000),
-        how: 'Re-run the one-line installer (install.sh / install.ps1) or npm run deploy after git pull to apply updates. D1 data is preserved.',
+        release_url,
+        notes,
+        main_sha,
+        main_message,
+        last_applied_commit: last?.v || '',
+        has_token,
+        how: 'دکمه «بروزرسانی الان» آخرین کد GitHub را می‌گیرد و روی همین Worker دیپلوی می‌کند. D1 و کاربران پاک نمی‌شوند.',
       });
     } catch (e) {
       return json({
@@ -134,6 +195,75 @@ export async function handleAdmin(
         message: e instanceof Error ? e.message : 'Update check failed',
       });
     }
+  }
+
+  // PUT /api/admin/cf-token — store CF API token for in-panel updates
+  if (action === 'cf-token' && (request.method === 'PUT' || request.method === 'POST')) {
+    const body = await request
+      .json<{
+        token?: string;
+        account_id?: string;
+        worker_name?: string;
+        d1_id?: string;
+      }>()
+      .catch(() => ({} as any));
+    try {
+      await saveCfToken(
+        env.DB,
+        String(body.token || ''),
+        body.account_id,
+        body.worker_name,
+        body.d1_id
+      );
+      await appendAudit(env.DB, 'cf_token_saved', 'ok', ip);
+      return json({ success: true, message: 'Cloudflare token saved for updates' });
+    } catch (e) {
+      return json(
+        { success: false, message: e instanceof Error ? e.message : 'Save failed' },
+        400
+      );
+    }
+  }
+
+  // GET /api/admin/update-status — live job progress
+  if (action === 'update-status' && request.method === 'GET') {
+    const job = await readUpdateJob(env.DB);
+    return json({ success: true, job });
+  }
+
+  // POST /api/admin/self-update — start GitHub → Cloudflare update (async)
+  if (action === 'self-update' && request.method === 'POST') {
+    const body = await request.json<{ token?: string; force?: boolean }>().catch(() => ({} as any));
+    if (body.token && String(body.token).length > 20) {
+      await saveCfToken(env.DB, String(body.token));
+    }
+
+    const running = await readUpdateJob(env.DB);
+    if (running?.status === 'running' && Date.now() - running.startedAt < 10 * 60 * 1000) {
+      return json({ success: true, job: running, message: 'Update already running' });
+    }
+
+    // Kick off in background so the request returns quickly; UI polls update-status
+    const req = request;
+    _ctx.waitUntil(
+      (async () => {
+        const job = await startSelfUpdate(env, req, {
+          token: body.token,
+          force: !!body.force,
+        });
+        await appendAudit(
+          env.DB,
+          job.status === 'done' ? 'self_update_ok' : 'self_update_error',
+          job.commit || job.error || '',
+          ip
+        );
+      })()
+    );
+
+    // Small delay so first steps exist for the UI
+    await new Promise((r) => setTimeout(r, 150));
+    const job = await readUpdateJob(env.DB);
+    return json({ success: true, job, message: 'Update started' });
   }
 
   // POST /api/admin/reset-password — set new password (admin already authenticated)

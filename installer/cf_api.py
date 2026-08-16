@@ -172,52 +172,93 @@ class CFClient:
         return result
 
 
-def verify_token(token: str) -> dict:
+def verify_token(token: str, account_id: str | None = None) -> dict:
+    """Verify token and return account info.
+
+    When ``account_id`` is provided, the returned account MUST be that account —
+    never the first account from a listing. This keeps multi-account deployments
+    pinned to the user's selected account.
+    """
     cf = CFClient(token)
+    if account_id:
+        data = cf.req("GET", f"/accounts/{account_id}")
+        a = data["result"]
+        return {"id": a["id"], "name": a.get("name", account_id)}
     data = cf.req("GET", "/accounts?per_page=1")
     a = data["result"][0]
     return {"id": a["id"], "name": a["name"]}
 
 
 def create_d1(cf: CFClient, account_id: str, name: str) -> dict:
+    """Idempotent D1 provisioning. Returns {"id", "name", "reused"}.
+
+    Requires a CFClient — callers must not pass a raw token. The account is
+    the caller's authoritative account_id; no account re-discovery happens here.
+    """
     logger.info(f"Creating D1: {name}")
     try:
         data = cf.req("GET", f"/accounts/{account_id}/d1/database?name={name}")
         for r in (data.get("result") or []):
             return {"id": r.get("uuid") or r.get("id"), "name": name, "reused": True}
-    except CFApiError:
-        pass
+    except CFApiError as exc:
+        # Listing failure is not fatal — proceed to a create attempt below.
+        logger.info(f"D1 listing failed, will try create: {exc}")
     data = cf.req("POST", f"/accounts/{account_id}/d1/database", json_body={"name": name})
     r = data.get("result") or {}
-    return {"id": r.get("uuid") or r.get("id"), "name": name, "reused": False}
+    db_id = r.get("uuid") or r.get("id")
+    if not db_id:
+        raise CFApiError(f"D1 create returned no id for {name!r}")
+    return {"id": db_id, "name": name, "reused": False}
 
 
 def get_subdomain(cf: CFClient, account_id: str) -> str:
+    """Return the account's workers.dev subdomain, creating it if absent.
+
+    Never fabricates a fallback value. A failed GET+create raises CFApiError
+    with Cloudflare's error context preserved.
+    """
     try:
         data = cf.req("GET", f"/accounts/{account_id}/workers/subdomain")
         r = data.get("result") or {}
         s = r.get("subdomain") or r.get("name")
         if s:
             return s
-    except CFApiError:
-        pass
+    except CFApiError as exc:
+        # 404 / 10036 means "none set yet" — that's expected on fresh accounts.
+        # Any other error must surface, not be swallowed.
+        msg = str(exc)
+        if not (("404" in msg) or ("10036" in msg) or "not found" in msg.lower()):
+            raise
     name = f"xraymod-{secrets.token_hex(4)}"
+    last_err: CFApiError | None = None
     for m in ("PUT", "POST", "PATCH"):
         try:
             cf.req(m, f"/accounts/{account_id}/workers/subdomain", json_body={"subdomain": name})
             return name
-        except CFApiError:
-            continue
-    raise CFApiError("Could not set workers.dev subdomain")
+        except CFApiError as exc:
+            last_err = exc
+            logger.info(f"subdomain create via {m} failed: {exc}")
+    raise CFApiError(
+        f"Could not set workers.dev subdomain for account {account_id}: {last_err}"
+    )
 
 
 def enable_subdomain(cf: CFClient, account_id: str, worker_name: str):
+    """Enable workers.dev on a worker. Raises CFApiError on failure.
+
+    The script-level subdomain enablement is best-effort per CF docs, but a
+    total failure must not be silently ignored — callers rely on the URL being
+    real before reporting success.
+    """
+    last_err: CFApiError | None = None
     for m in ("POST", "PUT", "PATCH"):
         try:
             cf.req(m, f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", json_body={"enabled": True})
             return
-        except CFApiError:
-            continue
+        except CFApiError as exc:
+            last_err = exc
+            logger.info(f"enable subdomain via {m} failed: {exc}")
+    raise CFApiError(f"Could not enable workers.dev on {worker_name}: {last_err}")
 
 
 def get_worker_settings(cf: CFClient, account_id: str, worker_name: str) -> dict | None:
@@ -296,9 +337,16 @@ def get_worker_url(cf: CFClient, account_id: str, worker_name: str) -> str:
     return f"https://{worker_name}.{subdomain}.workers.dev"
 
 
-def get_worker_account(token: str) -> tuple[str, str]:
-    cf = CFClient(token)
-    data = cf.req("GET", "/accounts?per_page=1")
+def get_worker_account(token: str, account_id: str | None = None) -> tuple[str, str]:
+    """Return (account_id, account_name).
+
+    When ``account_id`` is given, it is authoritative — the token is verified
+    against exactly that account and the first-account shortcut is never used.
+    """
+    if account_id:
+        account = verify_token(token, account_id=account_id)
+        return account["id"], account["name"]
+    data = CFClient(token).req("GET", "/accounts?per_page=1")
     a = data["result"][0]
     return a["id"], a["name"]
 
