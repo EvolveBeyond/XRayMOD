@@ -4,9 +4,11 @@
  */
 import type { Env } from '../types';
 import { XRayMOD_VERSION } from './version';
+import { CloudflareEdgeProvider } from './edge-provider';
 
 const REPO = 'askarniroomand/XRayMOD';
 const JOB_KEY = 'panel.update_job';
+const cfProvider = new CloudflareEdgeProvider();
 
 export type UpdateStep = {
   id: number;
@@ -68,32 +70,14 @@ async function cf(
   body?: unknown,
   contentType = 'application/json'
 ): Promise<any> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-  };
-  let payload: BodyInit | undefined;
-  if (body !== undefined) {
-    if (typeof body === 'string' || body instanceof ArrayBuffer || body instanceof Uint8Array) {
-      headers['Content-Type'] = contentType;
-      payload = body as BodyInit;
-    } else if (body instanceof FormData) {
-      payload = body;
-    } else {
-      headers['Content-Type'] = 'application/json';
-      payload = JSON.stringify(body);
-    }
-  }
-  const res = await fetch(`https://api.cloudflare.com/client/v4${path}`, {
+  // accountId unused for raw paths that already include /accounts/...
+  return cfProvider.request(
+    { apiToken: token, accountId: '' },
     method,
-    headers,
-    body: payload,
-  });
-  const data = await res.json<any>().catch(() => ({}));
-  if (!res.ok || data.success === false) {
-    const err = JSON.stringify(data.errors || data).slice(0, 500);
-    throw new Error(`CF ${method} ${path}: ${err}`);
-  }
-  return data;
+    path,
+    body,
+    contentType
+  );
 }
 
 async function latestMainSha(): Promise<{ sha: string; message: string }> {
@@ -136,7 +120,7 @@ async function downloadReleaseAsset(name: string, minBytes = 500): Promise<Uint8
 }
 
 async function sha256Hex16(data: Uint8Array): Promise<string> {
-  const hash = await crypto.subtle.digest('SHA-256', data);
+  const hash = await crypto.subtle.digest('SHA-256', data as BufferSource);
   const bytes = new Uint8Array(hash);
   let hex = '';
   for (let i = 0; i < 16; i++) hex += bytes[i]!.toString(16).padStart(2, '0');
@@ -179,7 +163,7 @@ function untar(buf: Uint8Array): Map<string, Uint8Array> {
 
 async function gunzip(data: Uint8Array): Promise<Uint8Array> {
   const ds = new DecompressionStream('gzip');
-  const stream = new Blob([data]).stream().pipeThrough(ds);
+  const stream = new Blob([data as BlobPart]).stream().pipeThrough(ds);
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -299,7 +283,7 @@ async function deployWorkerModule(
   form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
   form.append(
     'worker.mjs',
-    new Blob([moduleBytes], { type: 'application/javascript+module' }),
+    new Blob([moduleBytes as BlobPart], { type: 'application/javascript+module' }),
     'worker.mjs'
   );
 

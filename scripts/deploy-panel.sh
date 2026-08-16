@@ -53,6 +53,6 @@ npx wrangler d1 execute "$D1_NAME" --remote --config "$CFG" --command \
 INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES ('panel.cf_account_id', '${ACCOUNT_ID}', ${NOW});
 INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES ('panel.worker_name', '${NAME}', ${NOW});
 INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES ('panel.d1_id', '${D1_ID}', ${NOW});
-INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES ('panel.version', '5.1.1', ${NOW});" || echo "(warn) kvstore seed skipped"
+INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES ('panel.version', '1.9.12', ${NOW});" || echo "(warn) kvstore seed skipped"
 
 echo "OK: deployed $NAME"

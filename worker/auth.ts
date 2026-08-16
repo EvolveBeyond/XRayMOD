@@ -87,7 +87,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
       ['deriveBits']
     );
     const bits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' },
       key,
       256
     );
@@ -138,7 +138,7 @@ async function hotp(secret: Uint8Array, counter: number): Promise<string> {
 
   const key = await crypto.subtle.importKey(
     'raw',
-    secret,
+    secret as BufferSource,
     { name: 'HMAC', hash: 'SHA-1' },
     false,
     ['sign']

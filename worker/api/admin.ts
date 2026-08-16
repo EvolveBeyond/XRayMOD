@@ -11,6 +11,7 @@ import {
   startSelfUpdate,
 } from '../lib/self-update';
 import { XRayMOD_VERSION } from '../lib/version';
+import { edgeProviderSummary } from '../lib/edge-provider';
 
 export const APP_VERSION = XRayMOD_VERSION;
 const GITHUB_RELEASES =
@@ -82,6 +83,18 @@ export async function handleAdmin(
     const capBytes = capGB > 0 ? capGB * 1073741824 : 0;
     const usagePct = capBytes > 0 ? Math.min(100, Math.round((used / capBytes) * 100)) : 0;
 
+    const tokenRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.cf_api_token')
+      .first<{ v: string }>();
+    const accountRow = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('panel.cf_account_id')
+      .first<{ v: string }>();
+    const edge = await edgeProviderSummary(
+      tokenRow?.v && accountRow?.v
+        ? { apiToken: tokenRow.v, accountId: accountRow.v }
+        : null
+    );
+
     return json({
       success: true,
       data: {
@@ -99,6 +112,7 @@ export async function handleAdmin(
         cf_email: cfEmail?.v || '',
         secure_path: access?.v || '',
         panel_entry: access?.v ? `/${access.v}/panel` : '',
+        edge_provider: edge,
       },
     });
   }
