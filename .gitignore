@@ -16,6 +16,8 @@ frontend/tsconfig.tsbuildinfo
 .rolling/
 dist-worker/
 worker.js
+index.js
+build-worker.mjs
 *.map
 
 # Local / personal installer state (never commit)

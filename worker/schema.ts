@@ -1,5 +1,6 @@
 import type { Env } from './types';
 import { hashPasswordFast } from './auth';
+import { XRayMOD_SCHEMA_VERSION, XRayMOD_VERSION } from './lib/version';
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -250,7 +251,7 @@ const DEFAULT_SETTINGS = {
   'panel.cf_email': '',
   'panel.cf_email_enforce': 'false',
   'panel.custom_domains': '',
-  'panel.version': '5.1.1',
+  'panel.version': XRayMOD_VERSION,
   'ech.enabled': 'false',
   'ech.sni': 'cloudflare-ech.com',
   'ech.dns': 'https://dns.alidns.com/dns-query',
@@ -335,6 +336,18 @@ const TABLES = [
     status TEXT DEFAULT 'pending',
     created_at INTEGER
   )`,
+  `CREATE TABLE IF NOT EXISTS remote_api_keys (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    scopes_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    expires_at INTEGER,
+    last_used_at INTEGER,
+    created_at INTEGER NOT NULL,
+    revoked_at INTEGER
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_remote_api_keys_status ON remote_api_keys(status)`,
 ];
 
 /** Per-isolate cache — avoid re-running heavy DDL/seed on every request */
@@ -393,8 +406,8 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .bind(k, def, nowSoft)
         .run();
     }
-    // Gen 5.1.1: harden existing panels once
-    if (version.v !== '4' && version.v !== '5') {
+    // Gen 1.9.12: harden existing panels once
+    if (version.v !== '4') {
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
         .bind('disguise.fallback_page', '404', nowSoft)
@@ -405,11 +418,11 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .run();
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-        .bind('panel.version', '5.1.1', nowSoft)
+        .bind('panel.version', XRayMOD_VERSION, nowSoft)
         .run();
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-        .bind('schema.version', '4', nowSoft)
+        .bind('schema.version', XRayMOD_SCHEMA_VERSION, nowSoft)
         .run();
     }
     return;
@@ -491,6 +504,6 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
 
   await db
     .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
-    .bind('schema.version', '4', now)
+    .bind('schema.version', XRayMOD_SCHEMA_VERSION, now)
     .run();
 }

@@ -10,6 +10,8 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+type Authorizer = (request: Request, env: Env) => Promise<unknown>;
+
 function mapUser(u: User, prefix = '') {
   const limitGB = Math.round((u.traffic_limit / (1024 * 1024 * 1024)) * 10) / 10;
   const usedGB = Math.round((u.traffic_used / (1024 * 1024 * 1024)) * 10) / 10;
@@ -42,11 +44,23 @@ function mapUser(u: User, prefix = '') {
 export async function handleUsers(
   request: Request,
   env: Env,
-  _ctx: ExecutionContext,
+  ctx: ExecutionContext,
   params: Record<string, string>
 ): Promise<Response> {
+  return handleUsersAuthorized(request, env, ctx, params, async (req, authorizationEnv) =>
+    requireAdmin(req, authorizationEnv.DB)
+  );
+}
+
+export async function handleUsersAuthorized(
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+  authorize: Authorizer
+): Promise<Response> {
   try {
-    await requireAdmin(request, env.DB);
+    await authorize(request, env);
   } catch (e) {
     if (e instanceof Response) return e;
     return json({ success: false, message: 'Unauthorized' }, 401);

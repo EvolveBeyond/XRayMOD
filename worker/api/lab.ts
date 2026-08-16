@@ -13,6 +13,7 @@ import {
 } from '../lib/edge-ops';
 import { getSecureBase } from '../lib/secure-path';
 import { listWorkerVersions, rollbackWorkerVersion, readUpdateJob } from '../lib/self-update';
+import { XRayMOD_VERSION } from '../lib/version';
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -315,7 +316,7 @@ export async function handleLab(
     const users = await env.DB.prepare(`SELECT * FROM users`).all();
     const configs = await env.DB.prepare(`SELECT * FROM configs`).all();
     const payload = {
-      version: '5.1.1',
+      version: XRayMOD_VERSION,
       exportedAt: Date.now(),
       kv: (kv.results || []).filter(
         (r) => !r.k.startsWith('session:') && !r.k.startsWith('ratelimit:')

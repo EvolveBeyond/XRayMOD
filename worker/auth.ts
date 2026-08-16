@@ -7,7 +7,7 @@ const LOGIN_RATE_WINDOW = 60000;
 const PBKDF2_ITERATIONS = 12_000;
 const SALT_BYTES = 16;
 
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   const enc = new TextEncoder();
   const ba = enc.encode(a);
   const bb = enc.encode(b);

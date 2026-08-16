@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -27,7 +27,7 @@ jobs:
           echo "Ensure CHANGELOG.md contains this version section."
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: XRayMOD ${{ steps.ver.outputs.version }}
           generate_release_notes: true
@@ -36,7 +36,7 @@ jobs:
 
             See [CHANGELOG.md](https://github.com/askarniroomand/XRayMOD/blob/main/CHANGELOG.md) for details.
 
-            ### Breaking (5.1.1+)
+            ### Breaking (1.9.12+)
             Panel / API / subscription URLs require **SECURE PATH**:
             `https://YOUR.workers.dev/{SECURE_PATH}/panel`
 

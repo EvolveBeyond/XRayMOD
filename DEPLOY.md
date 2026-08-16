@@ -1,4 +1,4 @@
-# XRayMOD — Deploy & Runbook (v5.1.1)
+# XRayMOD — Deploy & Runbook (v1.9.12)
 
 ## Architecture (unified)
 
@@ -47,7 +47,7 @@ https://xraymod.<account>.workers.dev/<SECURE_PATH>/me/<USER_UUID>
 > Bare `/panel`, `/api/*`, `/sub/*` without SECURE PATH return **404**.
 
 Default seed login before you bind CF email: change password immediately.  
-Prefer **Admin → Cloudflare email** as login username (Gen 5.1.1).
+Prefer **Admin → Cloudflare email** as login username (Gen 1.9.12).
 
 ## Local development
 
@@ -70,7 +70,7 @@ uv run installer/app.py
 
 ## Environment vars (wrangler.toml / dashboard)
 
-Most panel secrets live in **D1** (not CF env) after Gen 5.1.1.
+Most panel secrets live in **D1** (not CF env) after Gen 1.9.12.
 
 | Var | Purpose |
 |-----|---------|

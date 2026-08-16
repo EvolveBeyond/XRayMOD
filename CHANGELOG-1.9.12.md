@@ -1,12 +1,12 @@
-# XRayMOD 5.1.1 — operator notes
+# XRayMOD 1.9.12 — operator notes
 
-Canonical release notes live in **[CHANGELOG.md](./CHANGELOG.md)** under `[5.1.1]`.
+Canonical release notes live in **[CHANGELOG.md](./CHANGELOG.md)** under `[1.9.12]`.
 
-This file is a short operator checklist for the Gen 5.1.1 anti-ban / SECURE PATH upgrade.
+This file is a short operator checklist for the Gen 1.9.12 anti-ban / SECURE PATH upgrade.
 
 ## Why panels were found / banned
 
-| Risk | Old | 5.1.1 |
+| Risk | Old | 1.9.12 |
 |------|-----|-------|
 | Scanners | Public `/api`, `/sub`, `/_next` | Compulsory **SECURE PATH** |
 | Fingerprints | Branded health JSON | Silent `{ ok: true }` / 404 |

@@ -142,7 +142,7 @@ export default function DashboardPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="chip chip-live">v{status?.version || '5.1.1'}</span>
+                <span className="chip chip-live">v{status?.version || '1.9.12'}</span>
                 <span className={status?.configured ? 'chip chip-live' : 'chip chip-warn'}>
                   {status?.configured ? t('active') : 'Setup pending'}
                 </span>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
             {status?.configured ? t('active') : 'Setup'}
           </p>
           <p className="text-[12px] text-[var(--text-muted)] mt-1 font-mono">
-            {status?.version || '5.1.1'}
+            {status?.version || '1.9.12'}
           </p>
         </BentoCell>
         <BentoCell span={3}>

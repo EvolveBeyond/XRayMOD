@@ -116,7 +116,7 @@ Update documentation:
 
 ## Version History
 
-### v5.1.1 (Current)
+### v1.9.12 (Current)
 - Compulsory SECURE PATH + silent 404
 - Admin Dashboard (update, CF email, domains, remote sync, kill switch)
 - Disguise ON by default · D-tagged custom domains

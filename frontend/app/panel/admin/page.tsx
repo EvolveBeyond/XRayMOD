@@ -11,6 +11,8 @@ import {
   Download,
   ExternalLink,
   AlertTriangle,
+  Copy,
+  Trash2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Card, CardHeader, Button, Input, PageHeader } from '@/components';
@@ -30,6 +32,18 @@ type Dash = {
   panel_entry: string;
 };
 
+type RemoteKey = {
+  id: string;
+  name: string;
+  scopes: string[];
+  status: 'active' | 'revoked';
+  expires_at: number | null;
+  last_used_at: number | null;
+  created_at: number;
+};
+
+const REMOTE_SCOPES = ['health:read', 'users:read', 'users:write', 'configs:read', 'configs:write'];
+
 export default function AdminPage() {
   const [dash, setDash] = useState<Dash | null>(null);
   const [update, setUpdate] = useState<any>(null);
@@ -38,6 +52,11 @@ export default function AdminPage() {
   const [newPass, setNewPass] = useState('');
   const [remoteUrl, setRemoteUrl] = useState('');
   const [remoteCookie, setRemoteCookie] = useState('');
+  const [remoteKeys, setRemoteKeys] = useState<RemoteKey[]>([]);
+  const [remoteKeyName, setRemoteKeyName] = useState('Control Center');
+  const [remoteScopes, setRemoteScopes] = useState<string[]>(REMOTE_SCOPES);
+  const [createdRemoteKey, setCreatedRemoteKey] = useState('');
+  const [creatingRemoteKey, setCreatingRemoteKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [cfToken, setCfToken] = useState('');
   const [updating, setUpdating] = useState(false);
@@ -56,6 +75,8 @@ export default function AdminPage() {
       setUpdate(u);
       const st = await api.get('/api/admin/update-status');
       if (st?.job) setUpdateJob(st.job);
+      const keys = await api.get('/api/remote/keys');
+      setRemoteKeys(Array.isArray(keys?.data) ? keys.data : []);
     } catch {
       toast.error('Failed to load admin dashboard');
     }
@@ -173,6 +194,59 @@ export default function AdminPage() {
       return;
     }
     toast.success(res.message || `Imported ${res.imported} keys`);
+  };
+
+  const copy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Key copied');
+    } catch {
+      toast.error('Copy failed');
+    }
+  };
+
+  const createRemoteKey = async () => {
+    if (!remoteKeyName.trim()) {
+      toast.error('Name required');
+      return;
+    }
+    if (!remoteScopes.length) {
+      toast.error('Select at least one scope');
+      return;
+    }
+    setCreatingRemoteKey(true);
+    const res = await api.post('/api/remote/keys', { name: remoteKeyName.trim(), scopes: remoteScopes });
+    setCreatingRemoteKey(false);
+    if (res.success === false) {
+      toast.error(res.message || 'Failed to create key');
+      return;
+    }
+    setCreatedRemoteKey(res.data?.key || '');
+    setRemoteKeys((keys) => [{
+      id: res.data.id,
+      name: res.data.name,
+      scopes: res.data.scopes,
+      status: 'active',
+      expires_at: res.data.expires_at,
+      last_used_at: null,
+      created_at: Date.now(),
+    }, ...keys]);
+    toast.success('Remote key created');
+  };
+
+  const revokeRemoteKey = async (key: RemoteKey) => {
+    if (!window.confirm(`Revoke ${key.name}?`)) return;
+    const res = await api.delete(`/api/remote/keys/${key.id}`);
+    if (res.success === false) {
+      toast.error(res.message || 'Failed to revoke key');
+      return;
+    }
+    setRemoteKeys((keys) => keys.map((item) => item.id === key.id ? { ...item, status: 'revoked' } : item));
+    toast.success('Remote key revoked');
+  };
+
+  const toggleRemoteScope = (scope: string) => {
+    setRemoteScopes((scopes) => scopes.includes(scope) ? scopes.filter((item) => item !== scope) : [...scopes, scope]);
   };
 
   const fmtBytes = (n: number) => {
@@ -447,6 +521,71 @@ export default function AdminPage() {
           <Button variant="secondary" onClick={remoteSync}>
             Sync now
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Remote access" />
+        <p className="text-xs text-zinc-500 mb-3">
+          Create a scoped key for a trusted control panel. The key is shown once.
+        </p>
+        <div className="space-y-3">
+          <Input
+            value={remoteKeyName}
+            onChange={(e: any) => setRemoteKeyName(e.target.value)}
+            placeholder="Control Center"
+          />
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-300">
+            {REMOTE_SCOPES.map((scope) => (
+              <label key={scope} className="inline-flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={remoteScopes.includes(scope)}
+                  onChange={() => toggleRemoteScope(scope)}
+                  className="accent-emerald-400"
+                />
+                {scope}
+              </label>
+            ))}
+          </div>
+          <Button onClick={createRemoteKey} disabled={creatingRemoteKey}>
+            <Key className="w-4 h-4 mr-2" />
+            {creatingRemoteKey ? 'Creating…' : 'Create key'}
+          </Button>
+        </div>
+
+        {createdRemoteKey && (
+          <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-xs text-amber-300 mb-2">Copy this key now. It will not be shown again.</p>
+            <div className="flex gap-2 items-start">
+              <code className="flex-1 min-w-0 break-all rounded bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-emerald-300">
+                {createdRemoteKey}
+              </code>
+              <Button size="sm" variant="secondary" onClick={() => copy(createdRemoteKey)}>
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 space-y-2">
+          {remoteKeys.length === 0 ? (
+            <p className="text-xs text-zinc-500">No remote keys.</p>
+          ) : remoteKeys.map((key) => (
+            <div key={key.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{key.name}</p>
+                <p className="text-[11px] text-zinc-500 break-words">{key.scopes.join(' · ')}</p>
+              </div>
+              {key.status === 'active' ? (
+                <Button size="sm" variant="secondary" onClick={() => revokeRemoteKey(key)} title="Revoke key">
+                  <Trash2 className="w-4 h-4 text-rose-400" />
+                </Button>
+              ) : (
+                <span className="text-xs text-zinc-500">Revoked</span>
+              )}
+            </div>
+          ))}
         </div>
       </Card>
     </div>

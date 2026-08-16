@@ -38,34 +38,35 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Detect OS
-if [ -f /etc/debian_version ]; then
-  OS="debian"
-elif [ -f /etc/redhat-release ]; then
-  OS="redhat"
-else
-  echo -e "${RED}Error: Unsupported OS. Use Ubuntu/Debian${NC}"
-  exit 1
-fi
-
-echo -e "${YELLOW}→${NC} Detecting system architecture..."
+# Detect architecture (XRay-core uses x64/arm64/arm32-v7a naming)
 ARCH=$(uname -m)
 case "$ARCH" in
-  x86_64) XRAY_ARCH="amd64" ;;
-  aarch64) XRAY_ARCH="arm64" ;;
-  armv7l) XRAY_ARCH="armv7" ;;
+  x86_64)  XRAY_ARCH="x64" ;;
+  aarch64) XRAY_ARCH="arm64-v8a" ;;
+  armv7l)  XRAY_ARCH="arm32-v7a" ;;
+  armv6l)  XRAY_ARCH="arm32-v6l" ;;
+  i686|i386) XRAY_ARCH="x86" ;;
   *) echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"; exit 1 ;;
 esac
 echo -e "${GREEN}✓${NC} Architecture: $XRAY_ARCH"
 
 # Install Xray-core
 echo -e "${YELLOW}→${NC} Installing Xray-core..."
-XRAY_VERSION=$(curl -sL "https://api.github.com/repos/XTLS/xray-core/releases/latest" | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.8.4")
-XRAY_URL="https://github.com/XTLS/xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${ARCH}.zip"
+XRAY_VERSION=$(curl -sfL "https://api.github.com/repos/XTLS/xray-core/releases/latest" | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || echo "v1.8.4")
+XRAY_URL="https://github.com/XTLS/xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${XRAY_ARCH}.zip"
 
+echo -e "${YELLOW}→${NC} Downloading ${XRAY_URL}..."
 cd /tmp
-curl -sL "$XRAY_URL" -o xray.zip
-unzip -o xray.zip -d xray-temp
+curl -fSL "$XRAY_URL" -o xray.zip || {
+  echo -e "${RED}Error: Failed to download Xray-core. Check architecture ($XRAY_ARCH) and URL.${NC}"
+  exit 1
+}
+
+unzip -o xray.zip -d xray-temp || {
+  echo -e "${RED}Error: Failed to extract Xray-core archive.${NC}"
+  rm -f xray.zip
+  exit 1
+}
 mv xray-temp/xray /usr/local/bin/xray
 chmod +x /usr/local/bin/xray
 rm -rf xray.zip xray-temp

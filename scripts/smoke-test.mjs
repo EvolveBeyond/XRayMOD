@@ -95,6 +95,8 @@ function matchRoute(pathname) {
     [/^\/api\/cleanip(?:\/([^/]+))?$/, ['action']],
     [/^\/api\/nodes(?:\/([^/]+))?$/, ['id']],
     [/^\/api\/backends(?:\/([^/]+))?$/, ['id']],
+    [/^\/api\/remote\/keys(?:\/([^/]+))?$/, ['id']],
+    [/^\/api\/remote\/([^/]+)(?:\/([^/]+))?$/, ['resource', 'id']],
     [/^\/sub\/([^/]+)$/, ['token']],
   ];
   for (const [pattern, names] of routes) {
@@ -138,6 +140,8 @@ async function main() {
     assert.deepEqual(matchRoute('/api/cleanip/scan')?.params, { action: 'scan' });
     assert.deepEqual(matchRoute('/api/users/42')?.params, { id: '42' });
     assert.deepEqual(matchRoute('/api/backends/7')?.params, { id: '7' });
+    assert.deepEqual(matchRoute('/api/remote/keys/key-1')?.params, { id: 'key-1' });
+    assert.deepEqual(matchRoute('/api/remote/users/42')?.params, { resource: 'users', id: '42' });
     assert.deepEqual(matchRoute('/sub/abc-def')?.params, { token: 'abc-def' });
     assert.equal(matchRoute('/api/login')?.params && Object.keys(matchRoute('/api/login').params).length, 0);
     assert.equal(matchRoute('/nope'), null);
@@ -196,6 +200,18 @@ async function main() {
     ok('Core worker files present');
   } catch (e) {
     fail('Core worker files present', e);
+  }
+
+  // Remote key UI
+  try {
+    const fs = await import('node:fs');
+    const root = path.resolve(__dirname, '..');
+    const adminPage = fs.readFileSync(path.join(root, 'frontend/app/panel/admin/page.tsx'), 'utf8');
+    assert.ok(adminPage.includes("/api/remote/keys"), 'remote key UI endpoint missing');
+    assert.ok(adminPage.includes('Remote access'), 'remote key UI section missing');
+    ok('Remote key UI source present');
+  } catch (e) {
+    fail('Remote key UI source present', e);
   }
 
   const passed = results.filter((r) => r.pass).length;

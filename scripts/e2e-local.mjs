@@ -1,5 +1,5 @@
 /**
- * Local E2E against wrangler dev --local — Gen 5.1.1 SECURE PATH aware.
+ * Local E2E against wrangler dev --local — Gen 1.9.12 SECURE PATH aware.
  * Flow: wait /install → bootstrap → API under /{SECURE}/api → sub under /{SECURE}/sub
  *
  * Run: npm run test:e2e
@@ -16,6 +16,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8799;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN_PASS = 'TestPass123!';
+const PERSIST_DIR = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'xraymod-e2e-'));
 
 function log(msg) {
   console.log(`  ${msg}`);
@@ -52,7 +53,7 @@ async function run(cmd, args, cwd) {
 }
 
 async function main() {
-  console.log('\nXRayMOD local E2E (Gen 5.1.1)\n');
+  console.log('\nXRayMOD local E2E (Gen 1.9.12)\n');
 
   if (!fs.existsSync(path.join(ROOT, 'frontend/out/index.html'))) {
     console.log('Building UI…');
@@ -62,7 +63,7 @@ async function main() {
   console.log(`Starting wrangler dev --local on :${PORT}…`);
   const child = spawn(
     'npx',
-    ['wrangler', 'dev', '--local', '--port', String(PORT), '--ip', '127.0.0.1'],
+    ['wrangler', 'dev', '--local', '--persist-to', PERSIST_DIR, '--port', String(PORT), '--ip', '127.0.0.1'],
     {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -82,6 +83,11 @@ async function main() {
   const cleanup = () => {
     try {
       child.kill('SIGTERM');
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.rmSync(PERSIST_DIR, { recursive: true, force: true });
     } catch {
       /* ignore */
     }
@@ -156,8 +162,8 @@ async function main() {
       const r = await fetch(api('/api/health'), { headers: { Cookie: cookie } });
       const body = await json(r);
       assert.equal(body.status, 'ok');
-      assert.equal(body.version, '5.1.1');
-      log('✓ GET /{SECURE}/api/health (admin) version 5.1.1');
+      assert.equal(body.version, '1.9.12');
+      log('✓ GET /{SECURE}/api/health (admin) version 1.9.12');
     }
 
     // Admin dashboard
@@ -165,9 +171,150 @@ async function main() {
       const r = await fetch(api('/api/admin/dashboard'), { headers: { Cookie: cookie } });
       const body = await json(r);
       assert.equal(body.success, true);
-      assert.equal(body.data.version, '5.1.1');
+      assert.equal(body.data.version, '1.9.12');
       assert.ok(body.data.secure_path);
       log('✓ GET /{SECURE}/api/admin/dashboard');
+    }
+
+    // Remote API auth
+    {
+      const r = await fetch(api('/api/remote/health'));
+      assert.equal(r.status, 401, 'remote health must require a bearer API key');
+      const body = await json(r);
+      assert.equal(body.success, false);
+      assert.equal(body.data, undefined, 'unauthorized response must not leak integration data');
+      log('✓ GET /{SECURE}/api/remote/health → 401');
+    }
+
+    // Remote keys
+    let remoteKey = '';
+    let remoteKeyId = '';
+    {
+      const r = await fetch(api('/api/remote/keys'), {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: 'E2E control center', scopes: ['health:read', 'users:read', 'users:write', 'configs:read', 'configs:write'] }),
+      });
+      assert.equal(r.status, 201, `remote key create failed: ${r.status}`);
+      const body = await json(r);
+      assert.equal(body.success, true);
+      assert.match(body.data.key, /^xrm_int_[A-Za-z0-9_-]{40,}$/);
+      assert.ok(body.data.id);
+      assert.equal(body.data.key_hash, undefined, 'key hash must never be returned');
+      remoteKey = body.data.key;
+      remoteKeyId = body.data.id;
+
+      const listed = await fetch(api('/api/remote/keys'), { headers: { Cookie: cookie } });
+      const listedBody = await json(listed);
+      assert.equal(listedBody.success, true);
+      const created = listedBody.data.find((key) => key.id === remoteKeyId);
+      assert.ok(created, 'created API key must be listed');
+      assert.equal(created.key, undefined, 'API key secret must not be returned after creation');
+      assert.equal(created.key_hash, undefined, 'API key hash must not be returned');
+      log('✓ GET/POST /{SECURE}/api/remote/keys');
+    }
+
+    const remoteAuth = (key = remoteKey) => ({
+      Authorization: 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    });
+
+    // Remote health
+    {
+      const r = await fetch(api('/api/remote/health'), { headers: remoteAuth() });
+      assert.equal(r.status, 200);
+      const body = await json(r);
+      assert.equal(body.success, true);
+      assert.equal(body.data.configured, true);
+      assert.equal(body.data.traffic, undefined, 'remote health must not expose admin-only traffic details');
+      log('✓ GET /{SECURE}/api/remote/health');
+    }
+
+    // Remote key checks
+    {
+      for (const value of ['', 'wrong', `${remoteKey}extra`]) {
+        const r = await fetch(api('/api/remote/users'), {
+          headers: { Authorization: value ? 'Bearer ' + value : '' },
+        });
+        assert.equal(r.status, 401, `invalid bearer credential must be rejected (${value || 'empty'})`);
+      }
+
+      const limited = await fetch(api('/api/remote/keys'), {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: 'health only', scopes: ['health:read'] }),
+      });
+      const limitedBody = await json(limited);
+      const r = await fetch(api('/api/remote/users'), {
+        headers: { Authorization: 'Bearer ' + limitedBody.data.key },
+      });
+      assert.equal(r.status, 403, 'scope-insufficient key must be rejected');
+
+      const invalidCreate = await fetch(api('/api/remote/keys'), {
+        method: 'POST',
+        headers: auth,
+        body: JSON.stringify({ name: 'expired key', scopes: ['health:read'], expiresAt: Date.now() - 1 }),
+      });
+      assert.equal(invalidCreate.status, 400, 'expired API key must not be created');
+      log('✓ remote key validation');
+    }
+
+    // Remote users and configs
+    let remoteUserId = 0;
+    let remoteConfigId = 0;
+    {
+      const username = `remote_${Date.now().toString(36)}`;
+      const createUser = await fetch(api('/api/remote/users'), {
+        method: 'POST',
+        headers: remoteAuth(),
+        body: JSON.stringify({ username, limit: 3, expiryDays: 14 }),
+      });
+      assert.equal(createUser.status, 201);
+      const createdUser = await json(createUser);
+      assert.equal(createdUser.success, true);
+      assert.ok(createdUser.data.id);
+      assert.ok(createdUser.data.uuid);
+      assert.ok(createdUser.data.sub_url.includes(`${secure}/sub/`));
+      remoteUserId = createdUser.data.id;
+
+      const userList = await fetch(api('/api/remote/users'), { headers: remoteAuth() });
+      const users = await json(userList);
+      assert.equal(users.success, true);
+      assert.ok(users.data.some((user) => user.id === remoteUserId && user.username === username));
+
+      const createConfig = await fetch(api('/api/remote/configs'), {
+        method: 'POST',
+        headers: remoteAuth(),
+        body: JSON.stringify({ userId: remoteUserId, protocolId: 'vless-ws', name: 'Remote test', settings: {} }),
+      });
+      assert.equal(createConfig.status, 201);
+      const createdConfig = await json(createConfig);
+      assert.equal(createdConfig.success, true);
+      assert.ok(createdConfig.data.id);
+      assert.ok(createdConfig.data.subscription.includes(`${secure}/sub/`));
+      remoteConfigId = createdConfig.data.id;
+
+      const configList = await fetch(api('/api/remote/configs'), { headers: remoteAuth() });
+      const configs = await json(configList);
+      assert.equal(configs.success, true);
+      assert.ok(configs.data.some((config) => config.id === remoteConfigId && config.userId === remoteUserId));
+      log('✓ GET/POST /{SECURE}/api/remote/users|configs');
+    }
+
+    // Remote key revocation
+    {
+      const revoke = await fetch(api(`/api/remote/keys/${remoteKeyId}`), {
+        method: 'DELETE',
+        headers: { Cookie: cookie },
+      });
+      assert.equal(revoke.status, 200);
+      assert.equal((await json(revoke)).success, true);
+
+      const revoked = await fetch(api('/api/remote/users'), { headers: remoteAuth() });
+      assert.equal(revoked.status, 401, 'revoked key must be rejected immediately');
+      const localStillWorks = await fetch(api('/api/users'), { headers: { Cookie: cookie } });
+      assert.equal(localStillWorks.status, 200, 'API-key revocation must not affect local admin sessions');
+      log('✓ DELETE /{SECURE}/api/remote/keys/:id');
     }
 
     // Users

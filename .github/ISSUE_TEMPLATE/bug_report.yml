@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for reporting a bug. **Redact secrets** (tokens, passwords, full SECURE PATH / panel UUIDs, cookies).
-        After Gen 5.1.1, bare `/panel` and `/sub` without SECURE PATH return 404 — mention your XRayMOD version.
+        After Gen 1.9.12, bare `/panel` and `/sub` without SECURE PATH return 404 — mention your XRayMOD version.
   - type: textarea
     id: summary
     attributes:
@@ -55,8 +55,8 @@ body:
     id: version
     attributes:
       label: Version / commit
-      placeholder: v5.1.1 or commit SHA
-      description: Prefer `v5.1.1` or newer (SECURE PATH generation)
+      placeholder: v1.9.12 or commit SHA
+      description: Prefer `v1.9.12` or newer (SECURE PATH generation)
   - type: dropdown
     id: os
     attributes:

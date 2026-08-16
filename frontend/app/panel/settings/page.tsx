@@ -43,7 +43,7 @@ export default function SettingsPage() {
   useEffect(() => {
     api.get('/api/health').then((d) => {
       setSystem({
-        version: d.version || '5.1.1',
+        version: d.version || '1.9.12',
         uptime: d.uptime || 'n/a',
         configured: !!d.configured,
         kv: d.kv !== false,

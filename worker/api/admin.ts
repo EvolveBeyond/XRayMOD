@@ -10,8 +10,9 @@ import {
   saveCfToken,
   startSelfUpdate,
 } from '../lib/self-update';
+import { XRayMOD_VERSION } from '../lib/version';
 
-export const APP_VERSION = '5.1.1';
+export const APP_VERSION = XRayMOD_VERSION;
 const GITHUB_RELEASES =
   'https://api.github.com/repos/askarniroomand/XRayMOD/releases/latest';
 const GITHUB_COMMITS =

@@ -76,16 +76,12 @@ async def oauth_wait(request: Request):
 
 @app.get("/api/check-token")
 async def check_token():
-    """Check if saved token is still valid."""
-    config = load()
-    token = config.get("access_token", "")
-    if not token:
-        return {"valid": False}
-    try:
-        account = verify_token(token)
-        return {"valid": True, "access_token": token, "account": account}
-    except CFApiError:
-        return {"valid": False}
+    """Token reuse is intentionally disabled — tokens are never persisted to disk.
+
+    Returns valid:False so the UI does not offer a session that can never
+    succeed. Clients must re-authenticate (OAuth) per deploy.
+    """
+    return {"valid": False, "reason": "token_persistence_disabled"}
 
 
 @app.post("/api/deploy")
@@ -100,8 +96,10 @@ async def deploy_endpoint(request: Request):
 
     try:
         cf = CFClient(access_token)
-        account_id, account_name = get_worker_account(access_token)
-        logger.info(f"Deploying to: {account_name}")
+        # Prefer the persisted account (never silently re-select the first one)
+        saved_account = load().get("account_id", "")
+        account_id, account_name = get_worker_account(access_token, account_id=saved_account or None)
+        logger.info(f"Deploying to: {account_name} ({account_id})")
 
         # Delete old worker if exists (clean install, not update)
         old_config = load()

@@ -5,7 +5,7 @@
 | Version | Supported |
 |:--------|:----------|
 | `5.1.x` / `main` (latest) | ✅ |
-| Tagged releases `v5.1.1+` | ✅ |
+| Tagged releases `v1.9.12+` | ✅ |
 | `v1.x` (pre–SECURE PATH) | ⚠️ upgrade strongly recommended |
 | Older untagged snapshots | ❌ |
 
@@ -52,7 +52,7 @@ The installer rewrites local config during deploy.
 3. Local metadata under `~/.xraymod/` should store **non-secret** deploy metadata only — not long-lived API tokens.
 4. Panel password is used for bootstrap and must not be committed.
 
-## Gen 5.1.1 security model (operators)
+## Gen 1.9.12 security model (operators)
 
 | Control | Behavior |
 |:--------|:---------|

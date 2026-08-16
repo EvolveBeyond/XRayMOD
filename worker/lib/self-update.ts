@@ -3,6 +3,7 @@
  * via Cloudflare API (keeps D1). Progress is stored in kvstore.
  */
 import type { Env } from '../types';
+import { XRayMOD_VERSION } from './version';
 
 const REPO = 'askarniroomand/XRayMOD';
 const JOB_KEY = 'panel.update_job';
@@ -404,7 +405,7 @@ export async function startSelfUpdate(
     await deployWorkerModule(token, accountId, workerName, moduleBytes, d1Id, assetsJwt);
     await step(env.DB, job, 'دیپلوی با موفقیت انجام شد', true);
 
-    await kvSet(env.DB, 'panel.version', '5.1.1');
+    await kvSet(env.DB, 'panel.version', XRayMOD_VERSION);
     await kvSet(env.DB, 'panel.last_update_commit', latest.sha);
     await kvSet(env.DB, 'panel.worker_name', workerName);
 

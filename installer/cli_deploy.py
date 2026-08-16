@@ -28,6 +28,9 @@ from pathlib import Path
 
 import httpx
 
+# cf_api is a sibling module (installer/ dir is on sys.path when run as a script)
+from cf_api import CFClient, CFApiError, create_d1, enable_subdomain, get_subdomain
+
 CF_API = "https://api.cloudflare.com/client/v4"
 SUPPORT_TG = "https://t.me/MRROBOT_DT"
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -232,60 +235,31 @@ def build_ui() -> None:
     ok("UI build شد")
 
 def create_or_get_d1(token: str, account_id: str, name: str) -> str:
-    try:
-        d = cf(token, f"/accounts/{account_id}/d1/database", "POST", {"name": name})
-        d1_id = d["result"].get("uuid") or d["result"].get("id")
+    """Idempotent D1 provisioning. account_id is authoritative — no re-discovery."""
+    cf = CFClient(token)
+    result = create_d1(cf, account_id, name)
+    d1_id = result["id"]
+    if not d1_id:
+        raise RuntimeError(f"D1 provisioning returned no id: {result!r}")
+    if result.get("reused"):
+        ok(f"D1 موجود: {name}")
+    else:
         ok(f"D1 ساخته شد: {name}")
-        return d1_id
-    except RuntimeError:
-        listing = cf(token, f"/accounts/{account_id}/d1/database")
-        for item in listing.get("result") or []:
-            if item.get("name") == name:
-                d1_id = item.get("uuid") or item.get("id")
-                ok(f"D1 موجود: {name}")
-                return d1_id
-        raise
+    return d1_id
 
 
 def ensure_workers_subdomain(token: str, account_id: str) -> str:
-    try:
-        r = httpx.get(
-            f"{CF_API}/accounts/{account_id}/workers/subdomain",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
-        )
-        data = r.json()
-        if data.get("success") and data.get("result", {}).get("subdomain"):
-            return data["result"]["subdomain"]
-    except Exception:
-        pass
+    """Get or create the account's workers.dev subdomain.
 
-    # try create
-    for name in ("xraymod", f"xrm{secrets.token_hex(3)}"):
-        r = httpx.put(
-            f"{CF_API}/accounts/{account_id}/workers/subdomain",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={"subdomain": name},
-            timeout=30,
-        )
-        data = r.json()
-        if data.get("success"):
-            ok(f"workers.dev subdomain: {name}")
-            return name
-        # already has one
-        if any(e.get("code") == 10036 for e in data.get("errors", [])):
-            r2 = httpx.get(
-                f"{CF_API}/accounts/{account_id}/workers/subdomain",
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=30,
-            )
-            d2 = r2.json()
-            if d2.get("result", {}).get("subdomain"):
-                return d2["result"]["subdomain"]
-    return "workers"
+    Raises CFApiError (via cf_api.get_subdomain) on failure — never fabricates a
+    fallback value like "workers". account_id is authoritative.
+    """
+    cf = CFClient(token)
+    subdomain = get_subdomain(cf, account_id)
+    if not subdomain:
+        raise RuntimeError(f"workers.dev subdomain could not be resolved for account {account_id}")
+    ok(f"workers.dev subdomain: {subdomain}")
+    return subdomain
 
 
 def write_wrangler(d1_id: str, worker_name: str) -> None:
@@ -317,7 +291,12 @@ CRYPTO_KEY = ""
     ok("wrangler.toml به‌روز شد")
 
 
-def deploy_worker(token: str, worker_name: str) -> str:
+def deploy_worker(token: str, account_id: str, worker_name: str) -> str:
+    """Deploy a worker and enable workers.dev subdomain.
+
+    ``account_id`` is the authoritative account — it is not re-discovered
+    inside the function. The returned URL is based on this account.
+    """
     info("دیپلوی Worker...")
     env = {"CLOUDFLARE_API_TOKEN": token}
     # npx wrangler deploy
@@ -325,21 +304,14 @@ def deploy_worker(token: str, worker_name: str) -> str:
 
     # enable workers.dev on script
     try:
-        accounts = cf(token, "/accounts?per_page=1")
-        account_id = accounts["result"][0]["id"]
-        httpx.post(
-            f"{CF_API}/accounts/{account_id}/workers/scripts/{worker_name}/subdomain",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={"enabled": True, "previews_enabled": True},
-            timeout=30,
-        )
-    except Exception:
-        pass
+        cf = CFClient(token)
+        cf.req("POST", f"/accounts/{account_id}/workers/scripts/{worker_name}/subdomain", json_body={"enabled": True, "previews_enabled": True})
+    except CFApiError as exc:
+        err(f"Subdomain enable failed: {exc}")
+        raise RuntimeError(f"Subdomain enable failed: {exc}")
 
-    subdomain = ensure_workers_subdomain(token, cf(token, "/accounts?per_page=1")["result"][0]["id"])
+    # Ensure workers.dev subdomain
+    subdomain = ensure_workers_subdomain(token, account_id)
     url = f"https://{worker_name}.{subdomain}.workers.dev"
     ok(f"Worker: {url}")
     return url
@@ -528,6 +500,31 @@ def _post_install(worker_url: str, username: str, password: str) -> dict:
     raise RuntimeError(" | ".join(errors[-4:]) if errors else "no transport worked")
 
 
+def verify_worker_url(worker_url: str, retries: int = 6, delay: float = 3.0) -> bool:
+    """Verify the worker endpoint is reachable and returns a sane response.
+
+    Distinguishes DNS/deploy lag (retriable) from a dead endpoint (abort).
+    Lifted TLS verification is never used for this check — the URL must be
+    genuinely reachable over valid TLS for the install to be considered done.
+    """
+    url = f"{worker_url.rstrip('/')}/api/health"
+    for i in range(retries):
+        try:
+            with httpx.Client(timeout=httpx.Timeout(15.0, connect=10.0), verify=True, http2=False, follow_redirects=True) as client:
+                r = client.get(url)
+                if r.status_code in (200, 404, 401, 403):
+                    # 404 can be the stealth 404 (disguise) — worker is up
+                    return True
+        except httpx.HTTPError:
+            if i < retries - 1:
+                info(f"تلاش {i + 1}/{retries} — منتظر edge/DNS...")
+                time.sleep(delay + i * 1.5)
+        except Exception:
+            if i < retries - 1:
+                time.sleep(delay)
+    return False
+
+
 def bootstrap_remote(worker_url: str, username: str, password: str, retries: int = 18) -> dict:
     info("راه‌اندازی پنل (bootstrap)...")
     info(f"هدف: {worker_url}/install")
@@ -658,10 +655,16 @@ def main() -> None:
         d1_id = create_or_get_d1(token, account_id, d1_name)
         ensure_workers_subdomain(token, account_id)
         write_wrangler(d1_id, worker_name)
-        worker_url = deploy_worker(token, worker_name)
+        worker_url = deploy_worker(token, account_id, worker_name)
         # wait for workers.dev DNS + TLS to settle
         info("منتظر آماده‌شدن edge (چند ثانیه)...")
         time.sleep(8)
+        # Verify the deployed worker is actually reachable before calling it done
+        if not verify_worker_url(worker_url):
+            err(f"Worker URL did not become reachable: {worker_url}")
+            print(f"\n  {Y}توجه: دیپلوی انجام شده ولی تأیید دسترسی ناموفق بود.") 
+            print(f"  ورک‌ر ممکن است هنوز در حال انتشار باشد — چند دقیقه بعد بررسی کن: {worker_url}")
+            sys.exit(2)
         data = bootstrap_remote(worker_url, username, password)
         save_config(
             {
