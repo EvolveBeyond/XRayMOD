@@ -30,6 +30,19 @@ type Dash = {
   cf_email: string;
   secure_path: string;
   panel_entry: string;
+  edge_provider?: {
+    provider: string;
+    displayName: string;
+    capabilities: { capability: string; status: string; note?: string }[];
+  };
+  security_policy?: {
+    require_secure_path: boolean;
+    origin_protection: boolean;
+    pause_data_plane: boolean;
+    disable_in_worker_proxy: boolean;
+    monthly_cap_gb: number;
+    notes: string;
+  };
 };
 
 type RemoteKey = {
@@ -304,6 +317,64 @@ export default function AdminPage() {
           <p className="font-display text-2xl font-bold">{dash?.paused ? 'PAUSED' : 'ON'}</p>
         </Card>
       </div>
+
+      {dash?.edge_provider && (
+        <Card>
+          <CardHeader
+            title="Edge Provider"
+            description="Cloudflare is control-plane only — plan-gated features stay blocked until proven"
+          />
+          <p className="text-xs text-zinc-500 mb-3">
+            {dash.security_policy?.notes ||
+              'VPN/proxy traffic belongs on Node Agents, not inside the Worker.'}
+          </p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {dash.edge_provider.capabilities.map((c) => (
+              <div
+                key={c.capability}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs text-zinc-200">{c.capability}</span>
+                  <span
+                    className={
+                      c.status === 'available'
+                        ? 'text-[10px] text-emerald-400'
+                        : c.status === 'plan_gated'
+                          ? 'text-[10px] text-amber-300'
+                          : 'text-[10px] text-zinc-500'
+                    }
+                  >
+                    {c.status}
+                  </span>
+                </div>
+                {c.note ? <p className="text-[11px] text-zinc-500 mt-1">{c.note}</p> : null}
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                const next = !(dash.security_policy?.disable_in_worker_proxy);
+                const res = await api.put('/api/admin/security-policy', {
+                  ...dash.security_policy,
+                  disable_in_worker_proxy: next,
+                });
+                if (res?.success === false) toast.error(res.message || 'Policy save failed');
+                else {
+                  toast.success(next ? 'In-Worker proxy disabled' : 'In-Worker proxy allowed (legacy)');
+                  load();
+                }
+              }}
+            >
+              {dash.security_policy?.disable_in_worker_proxy
+                ? 'Allow legacy in-Worker proxy'
+                : 'Disable in-Worker data plane'}
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <CardHeader

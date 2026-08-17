@@ -1,4 +1,6 @@
 import type { Env } from '../types';
+import { CloudflareEdgeProvider, edgeProviderSummary } from '../lib/edge-provider';
+import { XRayMOD_VERSION, XRayMOD_BUILD } from '../lib/version';
 
 function json(data: any, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -7,28 +9,57 @@ function json(data: any, status = 200): Response {
   });
 }
 
-const CF_API = 'https://api.cloudflare.com/client/v4';
+const ROLLING_WORKER =
+  'https://github.com/askarniroomand/XRayMOD/releases/download/rolling/worker.mjs';
+const WIZARD_STEPS = ['auth', 'capabilities', 'artifacts', 'deploy', 'done'] as const;
 
-async function cfCall(token: string, path: string, method = 'GET', body?: any): Promise<any> {
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${token}`,
-    'Accept': 'application/json',
-  };
-  const opts: RequestInit = { method, headers };
-  if (body) {
-    headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
+type WizardState = {
+  step: (typeof WIZARD_STEPS)[number] | 'idle';
+  auth: 'api_token' | 'oauth_preferred';
+  account_id?: string;
+  last_error?: string;
+  updated?: number;
+};
+
+function parseWizardState(raw?: string): WizardState {
+  try {
+    const o = raw ? (JSON.parse(raw) as WizardState) : null;
+    return {
+      step: o?.step || 'idle',
+      auth: o?.auth === 'oauth_preferred' ? 'oauth_preferred' : 'api_token',
+      account_id: o?.account_id,
+      last_error: o?.last_error,
+      updated: o?.updated,
+    };
+  } catch {
+    return { step: 'idle', auth: 'api_token' };
   }
-  const r = await fetch(`${CF_API}${path}`, opts);
-  const data = (await r.json()) as {
-    success?: boolean;
-    errors?: { message?: string }[];
-    result?: unknown;
-  };
-  if (!data.success) {
-    const errors = (data.errors || []).map((e) => e.message || JSON.stringify(e)).join('; ');
-    throw new Error(errors || 'Cloudflare API failed');
-  }
+}
+
+async function readWizardState(db: D1Database): Promise<WizardState> {
+  const row = await db
+    .prepare('SELECT v FROM kvstore WHERE k = ?')
+    .bind('wizard.state_json')
+    .first<{ v: string }>();
+  return parseWizardState(row?.v);
+}
+
+async function writeWizardState(db: D1Database, state: WizardState): Promise<void> {
+  state.updated = Date.now();
+  await db
+    .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+    .bind('wizard.state_json', JSON.stringify(state), Date.now())
+    .run();
+}
+
+async function cfCall(token: string, path: string, method = 'GET', body?: unknown): Promise<any> {
+  const provider = new CloudflareEdgeProvider();
+  const data = (await provider.request(
+    { apiToken: token, accountId: '' },
+    method,
+    path,
+    body
+  )) as { result?: unknown };
   return data.result;
 }
 
@@ -39,13 +70,50 @@ export async function handleWizard(
   params: Record<string, string>
 ): Promise<Response> {
   // GET /api/wizard — check wizard status
-  if (request.method === 'GET') {
+  if (request.method === 'GET' && !params.action) {
     const wizardKey = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.api_key').first<{ v: string }>();
+    const state = await readWizardState(env.DB);
     return json({
       success: true,
       data: {
         configured: !!wizardKey?.v,
         hasApiKey: !!wizardKey?.v,
+        primary: true,
+        shell_installers_deprecated: true,
+        oauth_preferred: true,
+        artifact: {
+          channel: 'rolling',
+          url: ROLLING_WORKER,
+          product_version: XRayMOD_VERSION,
+          build: XRayMOD_BUILD,
+          note: 'Deploy verified rolling Worker+UI assets, not a mutable raw GitHub branch tip.',
+        },
+        steps: WIZARD_STEPS,
+        state,
+      },
+    });
+  }
+
+  // GET /api/wizard/capabilities — plan-aware Edge Provider report
+  if (request.method === 'GET' && params.action === 'capabilities') {
+    const url = new URL(request.url);
+    const token =
+      url.searchParams.get('token') ||
+      (await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.api_key').first<{ v: string }>())?.v ||
+      '';
+    const accountId =
+      url.searchParams.get('accountId') ||
+      (await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('panel.cf_account_id').first<{ v: string }>())?.v ||
+      '';
+    const summary = await edgeProviderSummary(token && accountId ? { apiToken: token, accountId } : null);
+    const blocked = summary.capabilities.filter((c) => c.status === 'plan_gated' || c.status === 'unavailable');
+    return json({
+      success: true,
+      data: {
+        ...summary,
+        plan_gated: blocked.map((c) => c.capability),
+        honesty:
+          'Spectrum / static IP / load balancing stay blocked in UI until the Cloudflare plan proves them. Workers are control plane only.',
       },
     });
   }
@@ -64,6 +132,11 @@ export async function handleWizard(
       await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
         .bind('wizard.api_key', token, Date.now())
         .run();
+      await writeWizardState(env.DB, {
+        step: 'capabilities',
+        auth: 'api_token',
+        account_id: accounts[0].id,
+      });
 
       return json({
         success: true,
@@ -114,10 +187,15 @@ export async function handleWizard(
       const d1Id = d1.uuid || d1.id;
       log(`Database created: ${dbName} (${d1Id})`);
 
-      // Step 2: Download worker code
-      log('Downloading worker code...');
-      const workerCode = await fetch('https://raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/worker.js').then(r => r.text());
-      log(`Worker code downloaded (${workerCode.length} bytes)`);
+      // Step 2: Download versioned rolling Worker (not mutable branch tip)
+      log(`Downloading rolling Worker bundle (${XRayMOD_VERSION})…`);
+      const workerRes = await fetch(ROLLING_WORKER, { redirect: 'follow' });
+      if (!workerRes.ok) {
+        throw new Error(`Rolling worker.mjs HTTP ${workerRes.status} — run scripts/publish-rolling.sh`);
+      }
+      const workerCode = await workerRes.text();
+      if (workerCode.length < 1000) throw new Error('Rolling worker.mjs too small');
+      log(`Worker bundle downloaded (${Math.round(workerCode.length / 1024)} KB)`);
 
       // Step 3: Deploy worker
       log('Deploying worker...');
@@ -141,9 +219,7 @@ export async function handleWizard(
       formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), 'metadata.json');
       formData.append('worker.js', new Blob([workerCode], { type: 'application/javascript+module' }), 'worker.js');
 
-      const uploadResult = await cfCall(cfToken, `/accounts/${accountId}/workers/scripts/${projectName}`, 'PUT', null);
-      // Use direct fetch for FormData
-      const uploadR = await fetch(`${CF_API}/accounts/${accountId}/workers/scripts/${projectName}`, {
+      const uploadR = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${projectName}`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${cfToken}` },
         body: formData,
@@ -169,6 +245,11 @@ export async function handleWizard(
       const workerUrl = `https://${projectName}.${accounts[0].subdomain || 'workers.dev'}`;
 
       log('Deployment complete!');
+      await writeWizardState(env.DB, {
+        step: 'done',
+        auth: 'api_token',
+        account_id: accountId,
+      });
       return json({
         success: true,
         data: {

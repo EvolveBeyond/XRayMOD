@@ -12,6 +12,11 @@ import {
 } from '../lib/self-update';
 import { XRayMOD_VERSION } from '../lib/version';
 import { edgeProviderSummary } from '../lib/edge-provider';
+import {
+  parseSecurityPolicy,
+  readSecurityPolicy,
+  writeSecurityPolicy,
+} from '../lib/security-policy';
 
 export const APP_VERSION = XRayMOD_VERSION;
 const GITHUB_RELEASES =
@@ -115,8 +120,22 @@ export async function handleAdmin(
         secure_path: access?.v || '',
         panel_entry: access?.v ? `/${access.v}/panel` : '',
         edge_provider: edge,
+        security_policy: await readSecurityPolicy(env.DB),
       },
     });
+  }
+
+  if (action === 'security-policy' && request.method === 'GET') {
+    return json({ success: true, data: await readSecurityPolicy(env.DB) });
+  }
+
+  if (action === 'security-policy' && (request.method === 'PUT' || request.method === 'POST')) {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const current = await readSecurityPolicy(env.DB);
+    const next = parseSecurityPolicy(JSON.stringify({ ...current, ...body }));
+    await writeSecurityPolicy(env.DB, next);
+    await appendAudit(env.DB, 'security_policy_saved', JSON.stringify(next), ip);
+    return json({ success: true, data: next });
   }
 
   // GET /api/admin/update-check — compare with GitHub main + rolling bundle tip

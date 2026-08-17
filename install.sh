@@ -46,7 +46,8 @@ echo -e "${GREEN}║${BOLD}   XrayMOD  ·  نصب کاملاً خودکار     
 echo -e "${GREEN}║${DIM}   فقط توکن · یوزر · رمز  →  پنل آماده         ${NC}${GREEN}║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${CYAN}پشتیبانی:${NC} https://t.me/MRROBOT_DT"
+echo -e "${YELLOW}  DEPRECATED primary path:${NC} prefer the in-panel Wizard (/install) and rolling Worker artifacts."
+echo -e "  This shell installer remains for compatibility until cleanup is approved."
 echo ""
 
 die() { echo -e "${RED}✗${NC} $*" >&2; exit 1; }

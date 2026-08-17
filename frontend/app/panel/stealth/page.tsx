@@ -15,7 +15,7 @@ import { api } from '@/lib/api';
 import { Card, CardHeader, Button, Input, Toggle, StatusBadge } from '@/components';
 
 const SKINS = [
-  { id: '404', label: 'Silent 404 (recommended)', desc: 'بدون برند — بهترین ضدکشف' },
+  { id: '404', label: 'Silent 404 (recommended)', desc: 'بدون برند پنل — پاسخ عمومی خطا' },
   { id: '1101', label: 'CF Error 1101', desc: 'صفحه خطای کلاسیک Cloudflare' },
   { id: 'nginx', label: 'Nginx Welcome', desc: 'صفحه پیش‌فرض nginx' },
   { id: 'github', label: 'GitHub 404', desc: 'صفحه not found گیت‌هاب' },
@@ -180,10 +180,10 @@ export default function StealthPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-black flex items-center gap-2">
-            <Ghost className="text-emerald-400" size={28} /> استیلث
+            <Ghost className="text-emerald-400" size={28} /> حفاظت مبدأ
           </h1>
           <p className="text-zinc-500 text-sm mt-1">
-            مخفی‌سازی پنل، طعمه اسکنرها، kill switch و پشتیبان کامل
+            مسیر پنل را از اسکنر پنهان می‌کند. این استتار ترافیک VPN نیست.
           </p>
         </div>
         <Button onClick={save} disabled={saving}>
@@ -217,7 +217,7 @@ export default function StealthPage() {
             />
             <Toggle
               label="ساب ISP-aware"
-              description="Clean IP بر اساس اپراتور ایران (MCI/MTN/...)"
+              description="اولویت endpoint لبه بر اساس ASN/ISP بازدیدکننده"
               checked={ispAware}
               onChange={setIspAware}
             />
@@ -236,8 +236,8 @@ export default function StealthPage() {
 
         <Card>
           <CardHeader
-            title="پوسته جعلی (Decoy)"
-            description="وقتی مسیر اشتباه بزنند چه ببینند"
+            title="پوستهٔ عمومی (حفاظت مبدأ)"
+            description="وقتی مسیر اشتباه بزنند چه ببینند — اثر انگشت پنل را کم می‌کند، ترافیک را پنهان نمی‌کند"
           />
           <div className="grid grid-cols-2 gap-2">
             {SKINS.map((s) => (
@@ -264,8 +264,8 @@ export default function StealthPage() {
         <CardHeader title="مسیرهای مخفی" description="مسیر واقعی پنل را عوض کن — مسیرهای لو رفته decoy می‌شوند" />
         <div className="space-y-1 mb-4">
           <Toggle
-            label="فعال‌سازی Disguise"
-            description="remap مسیرهای secret + decoy برای /admin و /login"
+            label="فعال‌سازی حفاظت مبدأ"
+            description="مسیرهای secret remap می‌شوند؛ مسیرهای لو رفته پاسخ عمومی می‌گیرند"
             checked={enabled}
             onChange={setEnabled}
           />

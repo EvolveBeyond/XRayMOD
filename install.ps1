@@ -18,6 +18,9 @@
 $ErrorActionPreference = "Stop"
 $XrayModInstallerVersion = "2026.07.16-oss1"
 
+Write-Host "DEPRECATED primary path: prefer the in-panel Wizard (/install) and rolling Worker artifacts." -ForegroundColor Yellow
+Write-Host "This PowerShell installer remains for compatibility until cleanup is approved." -ForegroundColor DarkGray
+
 $RepoUrl = if ($env:XRAYMOD_REPO) { $env:XRAYMOD_REPO } else { "https://github.com/askarniroomand/XRayMOD.git" }
 $Branch  = if ($env:XRAYMOD_BRANCH) { $env:XRAYMOD_BRANCH } else { "main" }
 $InstallerDir = Join-Path $env:USERPROFILE ".xraymod"

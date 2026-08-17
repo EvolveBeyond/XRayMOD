@@ -95,6 +95,7 @@ function matchRoute(pathname) {
     [/^\/api\/cleanip(?:\/([^/]+))?$/, ['action']],
     [/^\/api\/nodes(?:\/([^/]+))?$/, ['id']],
     [/^\/api\/backends(?:\/([^/]+))?$/, ['id']],
+    [/^\/api\/agents(?:\/([^/]+))?$/, ['action']],
     [/^\/api\/remote\/keys(?:\/([^/]+))?$/, ['id']],
     [/^\/api\/remote\/([^/]+)(?:\/([^/]+))?$/, ['resource', 'id']],
     [/^\/sub\/([^/]+)$/, ['token']],
@@ -140,6 +141,7 @@ async function main() {
     assert.deepEqual(matchRoute('/api/cleanip/scan')?.params, { action: 'scan' });
     assert.deepEqual(matchRoute('/api/users/42')?.params, { id: '42' });
     assert.deepEqual(matchRoute('/api/backends/7')?.params, { id: '7' });
+    assert.deepEqual(matchRoute('/api/agents/heartbeat')?.params, { action: 'heartbeat' });
     assert.deepEqual(matchRoute('/api/remote/keys/key-1')?.params, { id: 'key-1' });
     assert.deepEqual(matchRoute('/api/remote/users/42')?.params, { resource: 'users', id: '42' });
     assert.deepEqual(matchRoute('/sub/abc-def')?.params, { token: 'abc-def' });
@@ -193,6 +195,10 @@ async function main() {
       'worker/static.ts',
       'worker/api/login.ts',
       'worker/api/users.ts',
+      'worker/lib/node-agent.ts',
+      'worker/lib/security-policy.ts',
+      'worker/lib/edge-provider/index.ts',
+      'worker/api/agents.ts',
       'wrangler.toml',
     ]) {
       assert.ok(fs.existsSync(path.join(root, f)), `missing ${f}`);
@@ -209,9 +215,28 @@ async function main() {
     const adminPage = fs.readFileSync(path.join(root, 'frontend/app/panel/admin/page.tsx'), 'utf8');
     assert.ok(adminPage.includes("/api/remote/keys"), 'remote key UI endpoint missing');
     assert.ok(adminPage.includes('Remote access'), 'remote key UI section missing');
+    const wizardPage = fs.readFileSync(path.join(root, 'frontend/app/panel/wizard/page.tsx'), 'utf8');
+    assert.ok(wizardPage.includes('/api/wizard/capabilities'), 'wizard UI missing capabilities');
+    const agentSh = fs.readFileSync(path.join(root, 'scripts/node-agent.sh'), 'utf8');
+    assert.ok(agentSh.includes('/api/agents/heartbeat'), 'node-agent.sh missing heartbeat');
     ok('Remote key UI source present');
   } catch (e) {
     fail('Remote key UI source present', e);
+  }
+
+  try {
+    const fs = await import('node:fs');
+    const root = path.resolve(__dirname, '..');
+    const policy = fs.readFileSync(path.join(root, 'worker/lib/security-policy.ts'), 'utf8');
+    assert.ok(policy.includes('disable_in_worker_proxy'), 'policy missing in-worker proxy flag');
+    const agents = fs.readFileSync(path.join(root, 'worker/lib/node-agent.ts'), 'utf8');
+    assert.ok(agents.includes('NODE_AGENT_TOKEN_PREFIX'), 'node agent token prefix missing');
+    const wizard = fs.readFileSync(path.join(root, 'worker/api/wizard.ts'), 'utf8');
+    assert.ok(wizard.includes('releases/download/rolling/worker.mjs'), 'wizard must use rolling artifacts');
+    assert.ok(!wizard.includes('raw.githubusercontent.com/EvolveBeyond/XRayMOD/main/worker.js'), 'wizard still uses mutable branch tip');
+    ok('Control-plane contracts present');
+  } catch (e) {
+    fail('Control-plane contracts present', e);
   }
 
   const passed = results.filter((r) => r.pass).length;

@@ -18,6 +18,7 @@ import {
   Ghost,
   ShieldCheck,
   FlaskConical,
+  Wand2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { goPanel, getPanelPrefix } from '@/lib/paths';
@@ -33,6 +34,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { href: '/panel', key: 'dashboard', icon: LayoutDashboard },
       { href: '/panel/lab', key: 'lab', icon: FlaskConical },
       { href: '/panel/admin', key: 'admin', icon: ShieldCheck },
+      { href: '/panel/wizard', key: 'wizard', icon: Wand2 },
       { href: '/panel/users', key: 'users', icon: Users },
     ],
   },

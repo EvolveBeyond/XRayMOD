@@ -32,24 +32,14 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Typecheck worker (if tsconfig present)
-        run: |
-          if [ -f tsconfig.json ]; then
-            npx tsc --noEmit || true
-          fi
+      - name: Typecheck worker
+        run: npm run lint
 
       - name: Frontend install & build
-        working-directory: frontend
-        run: |
-          if [ -f package.json ]; then
-            if [ -f package-lock.json ]; then npm ci; else npm install; fi
-            npm run build --if-present
-          fi
+        run: npm run build:ui
 
-      - name: Smoke scripts
-        run: |
-          if [ -f scripts/smoke-test.mjs ]; then node scripts/smoke-test.mjs || true; fi
-          if [ -f test-offline.sh ]; then bash test-offline.sh || true; fi
+      - name: Smoke tests
+        run: npm test
 
   installer-syntax:
     name: Installer syntax

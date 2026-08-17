@@ -16,6 +16,7 @@ REM ═════════════════════════�
 
 echo.
 echo  XrayMOD - automatic installer
+echo  DEPRECATED: prefer Wizard /install. Shell path kept for compatibility.
 echo  Support: https://t.me/MRROBOT_DT
 echo.
 

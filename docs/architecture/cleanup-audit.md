@@ -40,7 +40,7 @@ See [AGENTS.md](../../AGENTS.md) Phase 2 and migration §2.5.
 | `components/`, `lib/` (repo root) | DUPLICATE / UNKNOWN | Appear leftover from Vite panel | Possibly `src/` | `frontend/components` | Medium — reference-check before delete |
 | `wizard/` | LEGACY_BUT_POTENTIALLY_USEFUL | Wizard Worker script package | Install/docs | Evolve into Phase 5 orchestrator | **High** — intended primary path |
 | `installer/` | OBSOLETE_INSTALLER (as *primary*) | Python CLI deploy still works | `install.sh`, README | Wizard | **High** without migration |
-| `install.sh`, `install.ps1`, `install.cmd` | OBSOLETE_INSTALLER (as *primary*) | Shell onboarding | README / users | Wizard | **High** |
+| `install.sh`, `install.ps1`, `install.cmd` | OBSOLETE_INSTALLER (as *primary*) | Banner + README mark deprecated; files kept | README / users | Wizard | **High** without `approve cleanup` |
 | `build-worker.sh`, `test-offline.sh` | UNKNOWN | Helper scripts | CI/local? | Document or fold into npm scripts | Medium |
 
 ---
@@ -60,7 +60,7 @@ See [AGENTS.md](../../AGENTS.md) Phase 2 and migration §2.5.
 | Path | Type | Reason | Action |
 |------|------|--------|--------|
 | `ROADMAP.md` Phase 4 Telegram line | UNUSED_DOCUMENTATION (partial) | Struck through but roadmap still “panel” oriented | Update in Phase 7 |
-| Stealth / “clean IP” copy in UI | UNKNOWN | Conflicts with honesty rules | Reword in Phase 6 — not a file delete |
+| Stealth / “clean IP” copy in UI | UNUSED_DOCUMENTATION (partial) | Reworded in Phase 6 | Keep routes; language updated |
 
 ---
 

@@ -66,15 +66,15 @@ export default function SupportPage() {
 
       <Card>
         <CardHeader
-          title={lang === 'fa' ? 'نصب یک‌خطی' : 'One-line install'}
+          title={lang === 'fa' ? 'Node Agent روی VPS' : 'Node Agent on the VPS'}
           description={
             lang === 'fa'
-              ? 'روی سرور یا لپ‌تاپ خودت این دستور را بزن'
-              : 'Run this on your machine'
+              ? 'بعد از Enroll در صفحه Nodes این دستور را روی سرور بزن (نصب شل پنل منسوخ است)'
+              : 'After enroll on Nodes, run this on the VPS (panel shell installer is deprecated)'
           }
         />
         <code className="block text-xs sm:text-sm font-mono text-emerald-400 bg-zinc-950 border border-zinc-800 rounded-xl p-4 overflow-x-auto">
-          bash &lt;(curl -fsSL https://raw.githubusercontent.com/askarniroomand/XRayMOD/refs/heads/main/install.sh)
+          bash scripts/node-agent.sh https://YOUR_WORKER.workers.dev xrm_node_TOKEN
         </code>
       </Card>
     </div>

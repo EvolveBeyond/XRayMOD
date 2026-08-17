@@ -371,8 +371,8 @@ export default function CleanIPPage() {
     <div className="page-shell space-y-6">
       <PageHeader
         eyebrow="Network probe"
-        title="آی‌پی تمیز"
-        description="اسکن واقعی از اینترنت شما — بهترین edge برای همین مسیر"
+        title="نقاط لبه Cloudflare"
+        description="Anycast edge از مسیر ISP شما — آی‌پی‌های Cloudflare «تمیز»، خانگی یا تضمین‌شده برای دور زدن طبقه‌بندی VPN نیستند."
         actions={
           <>
             <Button

@@ -15,6 +15,7 @@ import { handleConfigs } from './api/configs';
 import { handleSettings } from './api/settings';
 import { handleCleanIP } from './api/cleanip';
 import { handleBackends } from './api/backends';
+import { handleAgents } from './api/agents';
 import { handleWizard } from './api/wizard';
 import { handleTools } from './api/tools';
 import { handleAdmin } from './api/admin';
@@ -24,6 +25,7 @@ import { handleRemote } from './api/remote-api';
 import { handleSubscription } from './subscription';
 import { handleUserPortal } from './user-portal';
 import { handleProxyTraffic } from './proxy';
+import { readSecurityPolicy } from './lib/security-policy';
 import {
   getDisguiseConfig,
   getDecoyResponse,
@@ -63,6 +65,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/settings$/, handler: handleSettings },
   { pattern: /^\/api\/cleanip(?:\/([^/]+))?$/, handler: handleCleanIP, params: ['action'] },
   { pattern: /^\/api\/backends(?:\/([^/]+))?$/, handler: handleBackends, params: ['id'] },
+  { pattern: /^\/api\/agents(?:\/([^/]+))?$/, handler: handleAgents, params: ['action'] },
   { pattern: /^\/api\/wizard(?:\/([^/]+))?$/, handler: handleWizard, params: ['action'] },
   { pattern: /^\/api\/tools(?:\/([^/]+))?$/, handler: handleTools, params: ['action'] },
   { pattern: /^\/api\/admin(?:\/([^/]+))?$/, handler: handleAdmin, params: ['action'] },
@@ -206,8 +209,15 @@ export async function handleRequest(
       return silent404();
     }
 
-    // WebSocket / gRPC / XHTTP → proxy (same Worker edge; kill switch + monthly cap)
+    // WebSocket / gRPC / XHTTP → legacy in-Worker proxy (kill switch + policy)
     if (isUpgrade || isGrpc || isXhttp) {
+      const policy = await readSecurityPolicy(env.DB);
+      if (policy.disable_in_worker_proxy) {
+        return new Response(
+          'In-Worker data plane is disabled. Terminate VPN/proxy sessions on a Node Agent.',
+          { status: 501, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+        );
+      }
       const blocked = await checkProxyGuards(env);
       if (blocked) return blocked;
       return handleProxyTraffic(request, env, ctx);

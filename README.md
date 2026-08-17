@@ -4,8 +4,8 @@
 
 <p align="center">
   <strong>Open-source · Serverless · Stealth-aware</strong><br/>
-  Modern <b>VLESS / Trojan / VMess</b> control plane on <b>Cloudflare Workers + D1</b><br/>
-  <sub>Admin dashboard · User status portal · Smart subscription · Disguise skins · One-line install</sub>
+  Modern <b>control plane</b> on <b>Cloudflare Workers + D1</b> · data plane on your nodes<br/>
+  <sub>Admin dashboard · Node Agents · Wizard onboarding · origin protection</sub>
 </p>
 
 <p align="center">
@@ -34,9 +34,11 @@
 
 # XRayMOD
 
-**XRayMOD** is an open-source, serverless control plane for managing proxy users and subscription links on **Cloudflare Workers** with **D1** storage.
+**XRayMOD** is an open-source **Secure VPN Infrastructure Control Plane** on **Cloudflare Workers + D1**.
 
-You get a practical admin UI, a user-facing status page, smart subscription bundles, and optional disguise surfaces — without renting a VPS for the panel itself.
+The Worker is the control plane (APIs, policy, subscriptions, onboarding). VPN/proxy data-plane traffic belongs on **Node Agents** (Xray / sing-box) — not inside Workers. Cloudflare is an Edge Provider (security, Workers, D1), not a VPN runtime. Cloudflare anycast addresses are **not** “clean”, residential, or guaranteed to evade classification.
+
+You get an admin UI, a user status page, subscription bundles, and origin-protection surfaces for the panel itself.
 
 > **Operator responsibility:** Comply with Cloudflare’s terms, local laws, and acceptable-use rules. This is infrastructure software — not permission to attack networks you do not control.
 
@@ -162,7 +164,15 @@ The installer never uploads your token to this GitHub repo. It stays on your mac
 
 ## Quick start (≈5 minutes)
 
-### 1) Run the installer
+**Canonical onboarding** is the in-panel Wizard (`/install`) which deploys **versioned rolling** Worker+UI assets (`releases/tag/rolling`), not a mutable GitHub branch tip. OAuth is the preferred Cloudflare auth when available; API tokens remain supported.
+
+Shell scripts below are a **deprecated compatibility path** (not deleted).
+
+### 1) Preferred: Wizard after a first Worker exists
+
+Open `https://YOUR_WORKER.workers.dev/install` (or `/{SECURE_PATH}/panel` → Admin) and follow auth → capability check → rolling artifact deploy.
+
+### 2) Compatibility: one-line shell installer
 
 **Windows PowerShell** (prompt starts with `PS`):
 

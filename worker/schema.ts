@@ -267,7 +267,10 @@ const DEFAULT_SETTINGS = {
   'cleanip.health_enabled': 'true',
   'panel.speed_profile': 'stable',
   'panel.sub_name': 'XRayMOD',
-  'panel.sub_banner': 'Secure edge · Clean IP · Smart sub',
+  'panel.sub_banner': 'Secure VPN infrastructure control plane',
+  'security.policy_json':
+    '{"require_secure_path":true,"origin_protection":true,"pause_data_plane":false,"disable_in_worker_proxy":false,"monthly_cap_gb":0,"notes":"VPN/proxy traffic belongs on Node Agents, not inside the Worker."}',
+  'wizard.state_json': '{"step":"idle","auth":"api_token"}',
   'canary.blocked_ips': '[]',
   'canary.report': '{"hits":[],"blocked":[]}',
   'brand.config': '',
@@ -398,6 +401,8 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
       'panel.cf_email_enforce',
       'panel.custom_domains',
       'panel.version',
+      'security.policy_json',
+      'wizard.state_json',
     ] as const) {
       const def = (DEFAULT_SETTINGS as Record<string, string>)[k];
       if (def === undefined) continue;
@@ -407,7 +412,7 @@ async function ensureSchemaInner(db: D1Database): Promise<void> {
         .run();
     }
     // Gen 1.9.12: harden existing panels once
-    if (version.v !== '4') {
+    if (version.v !== '5') {
       await db
         .prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
         .bind('disguise.fallback_page', '404', nowSoft)
