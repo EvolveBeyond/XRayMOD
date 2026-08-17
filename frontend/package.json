@@ -16,7 +16,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.5.0",
-    "sonner": "^2.0.7",
+    "sonner": "^2.0.8",
     "motion": "^13.0.0",
     "qrcode.react": "^4.2.0"
   },
