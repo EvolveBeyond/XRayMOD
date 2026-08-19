@@ -13,27 +13,40 @@ import hashlib
 import io
 import json
 import os
+import ssl
 import sys
 import tarfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 CF = "https://api.cloudflare.com/client/v4"
+CF_RETRIES = 5
 
 
 def cf(token: str, method: str, path: str, body: bytes | None = None, content_type: str = "application/json"):
-    req = urllib.request.Request(
-        f"{CF}{path}",
-        data=body,
-        method=method,
-        headers={
-            "Authorization": f"Bearer {token}",
-            **({"Content-Type": content_type} if body is not None and content_type else {}),
-        },
-    )
-    with urllib.request.urlopen(req) as res:
-        return json.loads(res.read().decode())
+    last_err: Exception | None = None
+    for attempt in range(CF_RETRIES):
+        try:
+            req = urllib.request.Request(
+                f"{CF}{path}",
+                data=body,
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    **({"Content-Type": content_type} if body is not None and content_type else {}),
+                },
+            )
+            with urllib.request.urlopen(req, timeout=120) as res:
+                return json.loads(res.read().decode())
+        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as e:
+            last_err = e
+            if attempt + 1 < CF_RETRIES:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    raise last_err  # type: ignore[misc]
 
 
 def cf_form(token: str, path: str, fields: dict[str, tuple[str, bytes, str]]):
@@ -50,17 +63,27 @@ def cf_form(token: str, path: str, fields: dict[str, tuple[str, bytes, str]]):
         chunks.append(b"\r\n")
     chunks.append(f"--{boundary}--\r\n".encode())
     body = b"".join(chunks)
-    req = urllib.request.Request(
-        f"{CF}{path}",
-        data=body,
-        method="PUT",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-        },
-    )
-    with urllib.request.urlopen(req) as res:
-        return json.loads(res.read().decode())
+    last_err: Exception | None = None
+    for attempt in range(CF_RETRIES):
+        try:
+            req = urllib.request.Request(
+                f"{CF}{path}",
+                data=body,
+                method="PUT",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": f"multipart/form-data; boundary={boundary}",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=180) as res:
+                return json.loads(res.read().decode())
+        except (urllib.error.URLError, TimeoutError, ssl.SSLError) as e:
+            last_err = e
+            if attempt + 1 < CF_RETRIES:
+                time.sleep(2 * (attempt + 1))
+                continue
+            raise
+    raise last_err  # type: ignore[misc]
 
 
 def sha256_hex16(data: bytes) -> str:
