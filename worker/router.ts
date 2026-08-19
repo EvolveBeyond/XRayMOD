@@ -66,7 +66,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/cleanip(?:\/([^/]+))?$/, handler: handleCleanIP, params: ['action'] },
   { pattern: /^\/api\/backends(?:\/([^/]+))?$/, handler: handleBackends, params: ['id'] },
   { pattern: /^\/api\/agents(?:\/([^/]+))?$/, handler: handleAgents, params: ['action'] },
-  { pattern: /^\/api\/wizard(?:\/([^/]+))?$/, handler: handleWizard, params: ['action'] },
+  { pattern: /^\/api\/wizard(?:\/([^/]+))?(?:\/([^/]+))?$/, handler: handleWizard, params: ['action', 'subaction'] },
   { pattern: /^\/api\/tools(?:\/([^/]+))?$/, handler: handleTools, params: ['action'] },
   { pattern: /^\/api\/admin(?:\/([^/]+))?$/, handler: handleAdmin, params: ['action'] },
   { pattern: /^\/api\/lab(?:\/([^/]+))?$/, handler: handleLab, params: ['action'] },

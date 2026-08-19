@@ -1,5 +1,20 @@
 import type { Env } from '../types';
 import { CloudflareEdgeProvider, edgeProviderSummary } from '../lib/edge-provider';
+import {
+  deployWorkerModule,
+  downloadRollingAsset,
+  rollingTagSha,
+  gunzip,
+  untar,
+  uploadAssets,
+} from '../lib/cf-deploy';
+import {
+  buildAuthorizeUrl,
+  exchangeOAuthCode,
+  genCodeVerifier,
+  genOAuthState,
+  readOAuthClientId,
+} from '../lib/cf-oauth';
 import { XRayMOD_VERSION, XRayMOD_BUILD } from '../lib/version';
 
 function json(data: any, status = 200): Response {
@@ -63,16 +78,119 @@ async function cfCall(token: string, path: string, method = 'GET', body?: unknow
   return data.result;
 }
 
+async function oauthRedirectUri(request: Request, env: Env): Promise<string> {
+  const custom = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+    .bind('wizard.oauth_redirect_uri')
+    .first<{ v: string }>();
+  if (custom?.v) return custom.v.trim();
+
+  const url = new URL(request.url);
+  const access = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+    .bind('panel.access_uuid')
+    .first<{ v: string }>();
+  const prefix = access?.v ? `/${access.v}` : '';
+  return `${url.origin}${prefix}/api/wizard/oauth/callback`;
+}
+
+async function handleOAuth(
+  request: Request,
+  env: Env,
+  subaction?: string
+): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (request.method === 'GET' && (!subaction || subaction === 'url')) {
+    const clientId = await readOAuthClientId(env.DB);
+    const redirectUri = await oauthRedirectUri(request, env);
+    const customClient = !!(await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('wizard.oauth_client_id')
+      .first());
+    const state = genOAuthState();
+    const verifier = genCodeVerifier();
+    await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+      .bind('wizard.oauth_state', state, Date.now())
+      .run();
+    await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+      .bind('wizard.oauth_verifier', verifier, Date.now())
+      .run();
+    const authorizeUrl = await buildAuthorizeUrl({ clientId, redirectUri }, state, verifier);
+    return json({
+      success: true,
+      data: {
+        authorize_url: authorizeUrl,
+        redirect_uri: redirectUri,
+        custom_client: customClient,
+        note: customClient
+          ? 'OAuth app configured in kvstore wizard.oauth_client_id.'
+          : 'Default wrangler OAuth client only works when redirect_uri is registered (usually localhost). Prefer API token or set wizard.oauth_client_id + wizard.oauth_redirect_uri.',
+      },
+    });
+  }
+
+  if (request.method === 'GET' && subaction === 'callback') {
+    const code = url.searchParams.get('code') || '';
+    const state = url.searchParams.get('state') || '';
+    const savedState = (
+      await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.oauth_state').first<{ v: string }>()
+    )?.v;
+    const verifier = (
+      await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.oauth_verifier').first<{ v: string }>()
+    )?.v;
+    if (!code || !verifier || state !== savedState) {
+      return json({ success: false, message: 'Invalid OAuth callback state' }, 400);
+    }
+    const clientId = await readOAuthClientId(env.DB);
+    const redirectUri = await oauthRedirectUri(request, env);
+    const tokens = await exchangeOAuthCode({ clientId, redirectUri }, code, verifier);
+    const accounts = await cfCall(tokens.access_token, '/accounts?per_page=1');
+    if (!accounts?.length) throw new Error('No Cloudflare accounts found');
+    await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+      .bind('wizard.api_key', tokens.access_token, Date.now())
+      .run();
+    if (tokens.refresh_token) {
+      await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
+        .bind('wizard.oauth_refresh_token', tokens.refresh_token, Date.now())
+        .run();
+    }
+    await writeWizardState(env.DB, {
+      step: 'capabilities',
+      auth: 'oauth_preferred',
+      account_id: accounts[0].id,
+    });
+    return json({
+      success: true,
+      data: {
+        accountId: accounts[0].id,
+        accountName: accounts[0].name,
+        message: 'OAuth token saved — continue in Wizard.',
+      },
+    });
+  }
+
+  return json({ success: false, message: 'OAuth action not found' }, 404);
+}
+
 export async function handleWizard(
   request: Request,
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>
 ): Promise<Response> {
+  if (params.action === 'oauth') {
+    try {
+      return await handleOAuth(request, env, params.subaction);
+    } catch (e: any) {
+      return json({ success: false, message: e.message || 'OAuth failed' }, 400);
+    }
+  }
+
   // GET /api/wizard — check wizard status
   if (request.method === 'GET' && !params.action) {
     const wizardKey = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.api_key').first<{ v: string }>();
     const state = await readWizardState(env.DB);
+    const oauthClient = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
+      .bind('wizard.oauth_client_id')
+      .first<{ v: string }>();
     return json({
       success: true,
       data: {
@@ -81,6 +199,7 @@ export async function handleWizard(
         primary: true,
         shell_installers_deprecated: true,
         oauth_preferred: true,
+        oauth_configured: !!oauthClient?.v,
         artifact: {
           channel: 'rolling',
           url: ROLLING_WORKER,
@@ -124,11 +243,9 @@ export async function handleWizard(
     const token = authHeader.replace('Bearer ', '');
 
     try {
-      // Verify the API key works
       const accounts = await cfCall(token, '/accounts?per_page=1');
       if (!accounts.length) throw new Error('No accounts found');
 
-      // Save the API key
       await env.DB.prepare('INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)')
         .bind('wizard.api_key', token, Date.now())
         .run();
@@ -150,7 +267,7 @@ export async function handleWizard(
     }
   }
 
-  // POST /api/wizard/deploy — deploy a panel for someone
+  // POST /api/wizard/deploy — deploy a panel (rolling worker.mjs + UI assets)
   if (request.method === 'POST' && params.action === 'deploy') {
     try {
       const body = await request.json<{
@@ -158,9 +275,9 @@ export async function handleWizard(
         accountId?: string;
         projectName?: string;
         adminPassword?: string;
+        bootstrap?: boolean;
       }>();
 
-      // Get saved API key or use provided one
       const savedKey = await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?').bind('wizard.api_key').first<{ v: string }>();
       const cfToken = body.cfToken || savedKey?.v;
 
@@ -168,81 +285,92 @@ export async function handleWizard(
         return json({ success: false, message: 'No Cloudflare API key configured. Send cfToken or set up wizard first.' }, 400);
       }
 
-      // Get account
       const accounts = await cfCall(cfToken, '/accounts?per_page=1');
       if (!accounts.length) throw new Error('No Cloudflare accounts found');
       const accountId = body.accountId || accounts[0].id;
+      const subdomain = accounts[0].subdomain || 'workers.dev';
 
-      // Generate random names
-      const projectName = body.projectName || `cf-${Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2, '0')).join('')}`;
+      const projectName =
+        body.projectName ||
+        `cf-${Array.from(crypto.getRandomValues(new Uint8Array(6)))
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')}`;
       const dbName = `${projectName}-db`;
-      const adminPassword = body.adminPassword || Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
 
       const logs: string[] = [];
       const log = (msg: string) => logs.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
 
-      // Step 1: Create D1 database
-      log('Creating D1 database...');
+      log('Creating D1 database…');
       const d1 = await cfCall(cfToken, `/accounts/${accountId}/d1/database`, 'POST', { name: dbName });
       const d1Id = d1.uuid || d1.id;
       log(`Database created: ${dbName} (${d1Id})`);
 
-      // Step 2: Download versioned rolling Worker (not mutable branch tip)
-      log(`Downloading rolling Worker bundle (${XRayMOD_VERSION})…`);
-      const workerRes = await fetch(ROLLING_WORKER, { redirect: 'follow' });
-      if (!workerRes.ok) {
-        throw new Error(`Rolling worker.mjs HTTP ${workerRes.status} — run scripts/publish-rolling.sh`);
+      log(`Resolving rolling bundle (${XRayMOD_VERSION})…`);
+      const rollingSha = await rollingTagSha();
+      log(`Rolling @ ${rollingSha}`);
+
+      log('Downloading worker.mjs…');
+      const moduleBytes = await downloadRollingAsset('worker.mjs', 1000, rollingSha);
+      log(`Worker bundle: ${Math.round(moduleBytes.byteLength / 1024)} KB`);
+
+      let assetsJwt: string | null = null;
+      try {
+        log('Downloading assets.tar.gz…');
+        const gz = await downloadRollingAsset('assets.tar.gz', 1000, rollingSha);
+        const tar = await gunzip(gz);
+        const files = untar(tar);
+        log(`Uploading ${files.size} UI files…`);
+        assetsJwt = await uploadAssets(cfToken, accountId, projectName, files, async (msg) => {
+          log(msg);
+        });
+      } catch (e) {
+        log(`UI bundle skipped: ${e instanceof Error ? e.message : String(e)}`);
       }
-      const workerCode = await workerRes.text();
-      if (workerCode.length < 1000) throw new Error('Rolling worker.mjs too small');
-      log(`Worker bundle downloaded (${Math.round(workerCode.length / 1024)} KB)`);
 
-      // Step 3: Deploy worker
-      log('Deploying worker...');
-      const metadata = {
-        main_module: 'worker.js',
-        compatibility_date: '2025-01-01',
-        compatibility_flags: ['nodejs_compat'],
-        bindings: [
-          { type: 'plain_text', name: 'ADMIN_PASSWORD', text: adminPassword },
-          { type: 'plain_text', name: 'DISGUISE_PAGE', text: '404' },
-          { type: 'plain_text', name: 'PANEL_RECOVERY', text: 'false' },
-        ],
-        migrations: {
-          new_tag: 'v1',
-          old_tag: null,
-        },
-      };
-
-      // Create FormData for upload
-      const formData = new FormData();
-      formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }), 'metadata.json');
-      formData.append('worker.js', new Blob([workerCode], { type: 'application/javascript+module' }), 'worker.js');
-
-      const uploadR = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${projectName}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${cfToken}` },
-        body: formData,
-      });
-      const uploadData = (await uploadR.json()) as {
-        success?: boolean;
-        errors?: { message?: string }[];
-      };
-      if (!uploadData.success) {
-        throw new Error(
-          `Worker upload failed: ${(uploadData.errors || []).map((e) => e.message || '').join('; ')}`
-        );
-      }
+      log('Deploying worker.mjs + D1 + assets (run_worker_first)…');
+      await deployWorkerModule(cfToken, accountId, projectName, moduleBytes, d1Id, assetsJwt);
       log('Worker deployed');
 
-      // Step 4: Enable workers.dev subdomain
-      log('Enabling workers.dev subdomain...');
+      log('Enabling workers.dev subdomain…');
       try {
         await cfCall(cfToken, `/accounts/${accountId}/workers/subdomain`, 'POST', { enabled: true });
-      } catch {}
-      log('Subdomain enabled');
+      } catch {
+        /* may already be enabled */
+      }
 
-      const workerUrl = `https://${projectName}.${accounts[0].subdomain || 'workers.dev'}`;
+      const workerUrl = `https://${projectName}.${subdomain}`;
+
+      let panelUrl = workerUrl;
+      let loginUrl = `${workerUrl}/install`;
+      if (body.bootstrap !== false) {
+        log('Bootstrapping panel via /install…');
+        try {
+          const boot = await fetch(`${workerUrl}/install`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({
+              auto: true,
+              ...(body.adminPassword ? { password: body.adminPassword } : {}),
+            }),
+          });
+          const bootData = (await boot.json()) as {
+            success?: boolean;
+            panelUrl?: string;
+            loginUrl?: string;
+            password?: string;
+            accessUUID?: string;
+          };
+          if (bootData.success) {
+            panelUrl = bootData.panelUrl || panelUrl;
+            loginUrl = bootData.loginUrl || loginUrl;
+            log(`Bootstrap ok — SECURE PATH panel ready`);
+          } else {
+            log('Bootstrap deferred — open /install on the new Worker URL');
+          }
+        } catch (e) {
+          log(`Bootstrap request failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
 
       log('Deployment complete!');
       await writeWizardState(env.DB, {
@@ -256,7 +384,9 @@ export async function handleWizard(
           projectName,
           d1Id,
           workerUrl,
-          adminPassword,
+          panelUrl,
+          loginUrl,
+          rollingSha,
           logs,
         },
       });

@@ -16,19 +16,33 @@ Legacy Vite SPA lives under `src/` and is **not** used by `npm run deploy`.
 - Cloudflare account + API token (Edit Cloudflare Workers)
 - Account must **not** be disabled (`wrangler whoami` must succeed)
 
-## Quick deploy
+## Quick deploy (operator)
+
+**Preferred:** ship to an existing panel (preserves D1, uses `worker.mjs` + `run_worker_first`):
 
 ```bash
-# 1. Install
 npm install
-
-# 2. Create D1 (once)
-npx wrangler d1 create xraymod-db
-# paste database_id into wrangler.toml
-
-# 3. Build UI + deploy Worker
-npm run deploy
+# ~/.xraymod/config.json from first deploy-panel.sh run
+bash scripts/ship-panel.sh
 ```
+
+**First panel** on a Cloudflare account:
+
+```bash
+npm install
+export CLOUDFLARE_API_TOKEN="…"
+export CLOUDFLARE_ACCOUNT_ID="…"
+npx wrangler d1 create xraymod-db
+bash scripts/deploy-panel.sh xraymod <d1_id>
+```
+
+Publish rolling bundle for in-panel self-update / wizard remote deploy:
+
+```bash
+bash scripts/publish-rolling.sh
+```
+
+Legacy `npm run deploy` (wrangler from TS) can trigger CF Error 1101 on some accounts — avoid for production.
 
 Panel URL after first install / bootstrap:
 

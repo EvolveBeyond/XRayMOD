@@ -69,3 +69,5 @@ uv.lock
 # Temp
 tmp/
 temp/
+.deploy/
+*.cpuprofile
