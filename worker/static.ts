@@ -32,7 +32,7 @@ export async function serveStatic(
       const assetReq = new Request(new URL(path, request.url), request);
       const res = await env.ASSETS.fetch(assetReq);
       if (res.status === 200) {
-        return injectHtmlGlobals(res, origin, panelPrefix);
+        return injectHtmlGlobals(res, origin, panelPrefix, path);
       }
     } catch {
       /* try next */
@@ -49,7 +49,7 @@ export async function serveStatic(
     try {
       const spa = await env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
       if (spa.status === 200) {
-        return injectHtmlGlobals(spa, origin, panelPrefix);
+        return injectHtmlGlobals(spa, origin, panelPrefix, pathname);
       }
     } catch {
       /* ignore */
@@ -69,31 +69,56 @@ function buildAssetCandidates(pathname: string): string[] {
     return out;
   }
 
-  out.push(clean);
+  // Prefer explicit HTML before bare paths — Assets may serve HTML bytes as octet-stream on /panel
   if (!clean.includes('.')) {
     out.push(`${clean}.html`);
     out.push(`${clean}/index.html`);
   }
-  if (clean.startsWith('/panel') && !clean.endsWith('.html')) {
-    out.push(`${clean}.html`);
-  }
+  out.push(clean);
   if (clean === '/login') out.push('/login.html');
   if (clean === '/panel') out.push('/panel.html');
 
   return [...new Set(out)];
 }
 
+function isHtmlPayload(text: string): boolean {
+  const t = text.trimStart().slice(0, 64).toLowerCase();
+  return t.startsWith('<!doctype') || t.startsWith('<html');
+}
+
+function isHtmlRoute(path: string): boolean {
+  const p = path.replace(/\/+$/, '') || '/';
+  return (
+    p.endsWith('.html') ||
+    p === '/panel' ||
+    p === '/login' ||
+    p === '/install' ||
+    p.startsWith('/panel/') ||
+    p.startsWith('/login/') ||
+    p.startsWith('/install/')
+  );
+}
+
 async function injectHtmlGlobals(
   res: Response,
   origin: string,
-  panelPrefix: string
+  panelPrefix: string,
+  pathHint = ''
 ): Promise<Response> {
   const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('text/html')) {
+  const treatAsHtml =
+    ct.includes('text/html') || isHtmlRoute(pathHint) || ct.includes('octet-stream');
+
+  if (!treatAsHtml) {
     return new Response(res.body, { status: res.status, headers: res.headers });
   }
 
-  let html = await res.text();
+  const raw = await res.text();
+  if (!isHtmlPayload(raw)) {
+    return new Response(raw, { status: res.status, headers: res.headers });
+  }
+
+  let html = raw;
   const script =
     `<script>` +
     `window.__API_BASE=${JSON.stringify(origin)};` +
@@ -147,7 +172,8 @@ export async function serveRemotePages(
         return injectHtmlGlobals(
           new Response(body, { headers: { 'Content-Type': 'text/html' } }),
           origin,
-          panelPrefix
+          panelPrefix,
+          p
         );
       }
       return new Response(body, {

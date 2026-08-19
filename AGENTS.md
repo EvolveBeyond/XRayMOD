@@ -95,7 +95,7 @@ After each phase, report:
 
 - [x] Panel Wizard page consuming `/api/wizard` + `/api/wizard/capabilities`
 - [x] `scripts/node-agent.sh` heartbeat/config pull loop
-- [ ] Commit + publish rolling + deploy live panel (operator)
+- [x] Commit + publish rolling + deploy live panel (operator) — rolling @ main; use `deploy-panel.sh` (worker.mjs path)
 - [ ] Cloudflare OAuth app (needs account credentials — not in-repo)
 
 ### Phase 2 remainder

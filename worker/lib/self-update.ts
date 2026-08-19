@@ -289,7 +289,13 @@ async function deployWorkerModule(
   };
 
   if (assetsJwt) {
-    metadata.assets = { jwt: assetsJwt };
+    metadata.assets = {
+      jwt: assetsJwt,
+      config: {
+        run_worker_first: true,
+        not_found_handling: 'none',
+      },
+    };
   } else {
     // Keep previous static UI if rolling assets missing
     metadata.keep_assets = true;

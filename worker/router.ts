@@ -139,6 +139,26 @@ function isRemovedPath(pathname: string): boolean {
   );
 }
 
+function mimeForStaticPath(pathname: string): string | null {
+  const lower = pathname.toLowerCase();
+  if (lower.endsWith('.css')) return 'text/css; charset=utf-8';
+  if (lower.endsWith('.js') || lower.endsWith('.mjs')) return 'application/javascript; charset=utf-8';
+  if (lower.endsWith('.json') || lower.endsWith('.map')) return 'application/json; charset=utf-8';
+  if (lower.endsWith('.woff2')) return 'font/woff2';
+  if (lower.endsWith('.woff')) return 'font/woff';
+  if (lower.endsWith('.ttf')) return 'font/ttf';
+  if (lower.endsWith('.eot')) return 'application/vnd.ms-fontobject';
+  if (lower.endsWith('.svg')) return 'image/svg+xml';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.gif')) return 'image/gif';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.ico')) return 'image/x-icon';
+  if (lower.endsWith('.html')) return 'text/html; charset=utf-8';
+  if (lower.endsWith('.txt')) return 'text/plain; charset=utf-8';
+  return null;
+}
+
 async function serveAsset(
   request: Request,
   env: Env,
@@ -154,6 +174,8 @@ async function serveAsset(
     if (assetRes.status === 200) {
       const headers = new Headers(assetRes.headers);
       headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+      const mime = mimeForStaticPath(pathname);
+      if (mime) headers.set('Content-Type', mime);
       return new Response(assetRes.body, { status: 200, headers });
     }
   } catch (e) {
@@ -330,6 +352,11 @@ export async function handleRequest(
 
       if (isRemovedPath(pathname)) {
         return silent404();
+      }
+
+      // /{uuid}/_next/... → serve chunks after secure-path strip
+      if (pathname.startsWith('/_next/') || pathname.startsWith('/favicon')) {
+        return (await serveAsset(request, env, pathname)) || silent404();
       }
 
       // Non-_next static under SECURE PATH (rare)
