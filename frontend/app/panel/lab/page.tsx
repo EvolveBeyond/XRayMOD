@@ -45,11 +45,11 @@ type Overview = {
 };
 
 const GROUP_META: Record<string, { fa: string; color: string }> = {
-  speed: { fa: 'سرعت و پایداری', color: 'var(--accent)' },
-  sub: { fa: 'ساب هوشمند', color: '#7dd3fc' },
-  ux: { fa: 'پنل و UX', color: '#fbbf24' },
-  stealth: { fa: 'ضد فیلتر', color: '#fb7185' },
-  ops: { fa: 'اپس و رشد', color: '#a78bfa' },
+  speed: { label: 'Speed & stability', color: 'var(--accent)' },
+  sub: { label: 'Smart sub', color: '#7dd3fc' },
+  ux: { label: 'Panel & UX', color: '#fbbf24' },
+  stealth: { label: 'Anti-filter', color: '#fb7185' },
+  ops: { label: 'Ops & growth', color: '#a78bfa' },
 };
 
 export default function LabPage() {
@@ -80,7 +80,7 @@ export default function LabPage() {
       const admin = list.find((u: any) => u.role === 'admin') || list[0];
       if (admin?.uuid) setAdminUuid(admin.uuid);
     } catch {
-      toast.error('بارگذاری Lab ناموفق');
+      toast.error('Failed to load Lab');
     }
   }, []);
 
@@ -94,7 +94,7 @@ export default function LabPage() {
       await fn();
       await load();
     } catch (e: any) {
-      toast.error(e?.message || 'خطا');
+      toast.error(e?.message || 'Error');
     }
     setBusy('');
   };
@@ -127,11 +127,11 @@ export default function LabPage() {
     <div className="page-shell space-y-6">
       <PageHeader
         eyebrow="XRayMOD Lab"
-        title="لَب پیشرفته"
-        description="سرعت · ساب هوشمند · وایت‌لیبل · استیلث · اپس — همه در یک صفحه"
+        title="Advanced Lab"
+        description="Speed · smart sub · whitelabel · stealth · ops — all in one page"
         actions={
           <Button variant="secondary" onClick={load}>
-            <Activity size={14} /> تازه‌سازی
+            <Activity size={14} /> Refresh
           </Button>
         }
       />
@@ -145,18 +145,18 @@ export default function LabPage() {
               <FlaskConical size={12} /> GEN LAB · EDGE OPS
             </div>
             <h2 className="font-display text-2xl md:text-3xl font-bold tracking-tight">
-              کنترل‌پلین نسل بعد برای فیلترینگ سخت
+              Next-gen control plane for harsh filtering
             </h2>
             <p className="text-sm text-[var(--text-muted)] leading-relaxed">
-              Auto Clean-IP شبانه، health-check، پروفایل سرعت، ساب مهمان با QR، split ایران، failover،
-              وایت‌لیبل، canary، backup و rollback — یکجا.
+              Nightly Auto Clean-IP, health-check, speed profiles, guest sub with QR, Iran split, failover,
+              whitelabel, canary, backup and rollback — all in one place.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 min-w-[260px]">
             {[
-              ['آنلاین ≈', data?.online_approx ?? '—'],
-              ['کاربر فعال', data?.users?.active ?? '—'],
-              ['ترافیک', fmtBytes(data?.traffic_used || 0)],
+              ['Online ≈', data?.online_approx ?? '—'],
+              ['Active users', data?.users?.active ?? '—'],
+              ['Traffic', fmtBytes(data?.traffic_used || 0)],
             ].map(([k, v]) => (
               <div
                 key={String(k)}
@@ -178,17 +178,17 @@ export default function LabPage() {
               <Moon size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-sm">Auto Clean-IP شبانه</p>
+              <p className="font-display font-semibold text-sm">Nightly Auto Clean-IP</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                Cron 01:15 UTC · Top-N برای هر ISP
+                Cron 01:15 UTC · Top-N per ISP
               </p>
             </div>
           </div>
           <p className="text-xs text-[var(--text-muted)] mb-3 font-mono">
-            آخرین:{' '}
+            Last run:{' '}
             {data?.last_cron
               ? new Date(data.last_cron).toLocaleString('fa-IR')
-              : 'هنوز اجرا نشده'}
+              : 'Not run yet'}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -197,11 +197,11 @@ export default function LabPage() {
               onClick={() =>
                 run('auto', async () => {
                   const r = await api.post('/api/lab/auto-clean', { topN: 28, enabled: true });
-                  toast.success(r?.data?.message || 'استخر به‌روز شد');
+                  toast.success(r?.data?.message || 'Pool updated');
                 })
               }
             >
-              <Play size={13} /> اجرای الان
+              <Play size={13} /> Run now
             </Button>
             <Button
               size="sm"
@@ -210,11 +210,11 @@ export default function LabPage() {
               onClick={() =>
                 run('cron', async () => {
                   await api.post('/api/lab/cron-run', {});
-                  toast.success('Cron دستی اجرا شد');
+                  toast.success('Manual cron executed');
                 })
               }
             >
-              Cron کامل
+              Full cron
             </Button>
           </div>
         </BentoCell>
@@ -225,16 +225,16 @@ export default function LabPage() {
               <HeartPulse size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-sm">Health-check لبه</p>
+              <p className="font-display font-semibold text-sm">Edge health-check</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                حذف IP مرده از ساب
+                Remove dead IPs from sub
               </p>
             </div>
           </div>
           <p className="text-xs text-[var(--text-muted)] mb-3">
             {data?.health_log
-              ? `چک‌شده ${data.health_log.checked || 0} · حذف ${data.health_log.removed || 0}`
-              : 'هنوز لاگ health نیست'}
+              ? `Checked ${data.health_log.checked || 0} · removed ${data.health_log.removed || 0}`
+              : 'No health log yet'}
           </p>
           <Button
             size="sm"
@@ -242,11 +242,11 @@ export default function LabPage() {
             onClick={() =>
               run('health', async () => {
                 const r = await api.post('/api/lab/health-check', {});
-                toast.success(r?.data?.message || 'تمام');
+                toast.success(r?.data?.message || 'Done');
               })
             }
           >
-            <HeartPulse size={13} /> اسکن سلامت
+            <HeartPulse size={13} /> Health scan
           </Button>
         </BentoCell>
 
@@ -256,9 +256,9 @@ export default function LabPage() {
               <Gauge size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-sm">پروفایل سرعت</p>
+              <p className="font-display font-semibold text-sm">Speed profile</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                فعلی: {data?.speed_profile || 'stable'}
+                Current: {data?.speed_profile || 'stable'}
               </p>
             </div>
           </div>
@@ -270,7 +270,7 @@ export default function LabPage() {
                 onClick={() =>
                   run('prof', async () => {
                     await api.put('/api/lab/profile', { profile: p });
-                    toast.success(`پروفایل ${p}`);
+                    toast.success(`Profile ${p}`);
                   })
                 }
                 className={`px-2.5 py-1 rounded-lg text-xs border ${
@@ -290,10 +290,10 @@ export default function LabPage() {
               onClick={() => {
                 const u = profileSub(data?.speed_profile || 'stable');
                 navigator.clipboard.writeText(u);
-                toast.success('لینک ساب پروفایل کپی شد');
+                toast.success('Profile sub link copied');
               }}
             >
-              کپی ساب این پروفایل
+              Copy this profile sub
             </button>
           )}
         </BentoCell>
@@ -305,9 +305,9 @@ export default function LabPage() {
               <QrCode size={16} />
             </div>
             <div className="flex-1">
-              <p className="font-display font-semibold text-sm">ساب مهمان ۲۴ساعته + QR</p>
+              <p className="font-display font-semibold text-sm">24-hour guest sub + QR</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                لینک موقت برای دوست / تست — خودکار منقضی می‌شود
+                Temporary link for friend / test — expires automatically
               </p>
             </div>
           </div>
@@ -325,12 +325,12 @@ export default function LabPage() {
                   setGuestUrl(u);
                   if (u) {
                     await navigator.clipboard.writeText(u);
-                    toast.success('لینک مهمان ساخته و کپی شد');
+                    toast.success('Guest link created and copied');
                   }
                 })
               }
             >
-              <Sparkles size={13} /> ساخت لینک ۲۴ساعته
+              <Sparkles size={13} /> Create 24-hour link
             </Button>
             {guestUrl && (
               <Button
@@ -338,10 +338,10 @@ export default function LabPage() {
                 variant="secondary"
                 onClick={() => {
                   navigator.clipboard.writeText(guestUrl);
-                  toast.success('کپی شد');
+                  toast.success('Copied');
                 }}
               >
-                <Copy size={13} /> کپی
+                <Copy size={13} /> Copy
               </Button>
             )}
           </div>
@@ -367,7 +367,7 @@ export default function LabPage() {
             <div>
               <p className="font-display font-semibold text-sm">Split + Failover</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                ایران DIRECT · خارج تونل · تگ [P1][P2]…
+                Iran DIRECT · foreign tunneled · tags [P1][P2]…
               </p>
             </div>
           </div>
@@ -378,11 +378,11 @@ export default function LabPage() {
               onClick={() => {
                 if (!splitSub) return;
                 navigator.clipboard.writeText(splitSub);
-                toast.success('sing-box split کپی شد');
+                toast.success('sing-box split copied');
               }}
             >
               <Globe2 size={12} className="inline me-1" />
-              کپی sing-box با Split ایران
+              Copy sing-box with Iran split
             </button>
             <button
               type="button"
@@ -391,14 +391,14 @@ export default function LabPage() {
                 if (!adminUuid) return;
                 const u = `${secureSubUrl(adminUuid, 'clash-meta')}`;
                 navigator.clipboard.writeText(u);
-                toast.success('Clash Meta split کپی شد');
+                toast.success('Clash Meta split copied');
               }}
             >
-              کپی Clash Meta (GEOIP IR → DIRECT)
+              Copy Clash Meta (GEOIP IR → DIRECT)
             </button>
             <p className="text-[11px] text-[var(--text-faint)]">
-              نام کانفیگ‌ها با اولویت Failover مثل <code>[P1]</code> Direct و{' '}
-              <code>[P2]</code> 🇩🇪 Germany ساخته می‌شوند.
+              Config names with Failover priority like <code>[P1]</code> Direct and{' '}}
+              <code>[P2]</code> 🇩🇪 Germany are generated.
             </p>
           </div>
         </BentoCell>
@@ -410,21 +410,21 @@ export default function LabPage() {
               <Palette size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-sm">وایت‌لیبل</p>
+              <p className="font-display font-semibold text-sm">Whitelabel</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                نام · رنگ · دامنه · متن ساب — برای فروش پنل
+                Name · color · domain · sub text — for reselling the panel
               </p>
             </div>
           </div>
           <div className="grid sm:grid-cols-2 gap-2 mb-3">
             {(
               [
-                ['name', 'نام برند'],
-                ['accent', 'رنگ اکسنت'],
-                ['domain', 'دامنه'],
-                ['sub_name', 'نام ساب'],
-                ['sub_banner', 'بنر ساب'],
-                ['logo_url', 'URL لوگو'],
+                ['name', 'Brand name'],
+                ['accent', 'Accent color'],
+                ['domain', 'Domain'],
+                ['sub_name', 'Sub name'],
+                ['sub_banner', 'Sub banner'],
+                ['logo_url', 'Logo URL'],
               ] as const
             ).map(([k, label]) => (
               <label key={k} className="text-[11px] text-[var(--text-faint)] space-y-1">
@@ -443,11 +443,11 @@ export default function LabPage() {
             onClick={() =>
               run('brand', async () => {
                 await api.put('/api/lab/brand', brand);
-                toast.success('وایت‌لیبل ذخیره شد');
+                toast.success('Whitelabel saved');
               })
             }
           >
-            ذخیره برند
+            Save brand
           </Button>
         </BentoCell>
 
@@ -457,9 +457,9 @@ export default function LabPage() {
               <Shield size={16} />
             </div>
             <div>
-              <p className="font-display font-semibold text-sm">Canary حرفه‌ای</p>
+              <p className="font-display font-semibold text-sm">Professional Canary</p>
               <p className="text-[11px] text-[var(--text-faint)] mt-1">
-                {data?.canary?.hits?.length || 0} ضربه · بلاک با یک کلیک
+                {data?.canary?.hits?.length || 0} hits · one-click block
               </p>
             </div>
           </div>
@@ -478,16 +478,16 @@ export default function LabPage() {
                   onClick={() =>
                     run('block', async () => {
                       await api.post('/api/lab/canary', { blockIp: h.ip });
-                      toast.success(`بلاک ${h.ip}`);
+                      toast.success(`Blocked ${h.ip}`);
                     })
                   }
                 >
-                  بلاک
+                  Block
                 </button>
               </div>
             ))}
             {!data?.canary?.hits?.length && (
-              <p className="text-xs text-[var(--text-muted)]">هنوز ضربه‌ای ثبت نشده</p>
+              <p className="text-xs text-[var(--text-muted)]">No hits recorded yet</p>
             )}
           </div>
           <Button
@@ -496,23 +496,23 @@ export default function LabPage() {
             onClick={() =>
               run('canary-clear', async () => {
                 await api.post('/api/lab/canary', { clear: true });
-                toast.success('پاک شد');
+                toast.success('Cleared');
               })
             }
           >
-            پاک کردن گزارش
+            Clear report
           </Button>
         </BentoCell>
 
         {/* Presets */}
         <BentoCell span={4}>
-          <p className="font-display font-semibold text-sm mb-3">پریست ضد فیلتر</p>
+          <p className="font-display font-semibold text-sm mb-3">Anti-filter presets</p>
           <div className="flex flex-col gap-2">
             {[
-              ['fragment', 'TLS Fragment یک‌کلیک'],
+              ['fragment', 'One-click TLS Fragment'],
               ['reality-ready', 'Reality-ready hints'],
               ['stealth-max', 'Stealth Max'],
-              ['ech', 'فعال‌سازی ECH'],
+              ['ech', 'Enable ECH'],
             ].map(([id, label]) => (
               <Button
                 key={id}
@@ -533,7 +533,7 @@ export default function LabPage() {
         </BentoCell>
 
         <BentoCell span={4}>
-          <p className="font-display font-semibold text-sm mb-3">دامنه‌های وزنی</p>
+          <p className="font-display font-semibold text-sm mb-3">Weighted domains</p>
           <textarea
             className="w-full h-28 text-xs font-mono rounded-lg border border-[var(--stroke)] bg-[var(--bg)] p-2 mb-2"
             placeholder={'cdn1.example.com:3\ncdn2.example.com:1'}
@@ -554,11 +554,11 @@ export default function LabPage() {
                     return { host: host.trim(), weight: Number(w) || 1 };
                   });
                 await api.put('/api/lab/domains', { domains });
-                toast.success('دامنه‌ها ذخیره شد');
+                toast.success('Domains saved');
               })
             }
           >
-            ذخیره وزن دامنه
+            Save domain weights
           </Button>
         </BentoCell>
 
@@ -588,13 +588,13 @@ export default function LabPage() {
                 a.href = URL.createObjectURL(blob);
                 a.download = `xraymod-backup-${Date.now()}.json`;
                 a.click();
-                toast.success('بکاپ دانلود شد');
+                toast.success('Backup downloaded');
               }}
             >
-              <Download size={13} /> دانلود بکاپ
+              <Download size={13} /> Download backup
             </Button>
             <label className="inline-flex items-center gap-2 px-3 py-2 rounded-[var(--radius)] border border-[var(--stroke)] text-xs cursor-pointer hover:border-[var(--accent)]/40">
-              <Upload size={13} /> بازگردانی JSON
+              <Upload size={13} /> Restore JSON
               <input
                 type="file"
                 accept="application/json"
@@ -605,23 +605,23 @@ export default function LabPage() {
                   try {
                     const parsed = JSON.parse(await f.text());
                     const r = await api.post('/api/lab/restore', parsed);
-                    toast.success(r.message || 'بازگردانی شد');
+                    toast.success(r.message || 'Restored');
                     load();
                   } catch {
-                    toast.error('فایل نامعتبر');
+                    toast.error('Invalid file');
                   }
                 }}
               />
             </label>
           </div>
           <p className="text-[11px] text-[var(--text-faint)]">
-            یک فایل JSON شامل تنظیمات kvstore (بدون session). برای جابجایی پنل عالی است.
+            A JSON file with kvstore settings (no sessions). Great for panel migration.
           </p>
         </BentoCell>
 
         <BentoCell span={6}>
           <p className="font-display font-semibold text-sm mb-3 flex items-center gap-2">
-            <Undo2 size={14} /> Rollback نسخه‌ها
+            <Undo2 size={14} /> Version rollback
           </p>
           <div className="flex flex-wrap gap-2 mb-3">
             <Button
@@ -632,15 +632,15 @@ export default function LabPage() {
                 run('ver', async () => {
                   const r = await api.get('/api/lab/versions');
                   if (r.success === false) {
-                    toast.error(r.message || 'توکن CF لازم است');
+                    toast.error(r.message || 'CF token required');
                     return;
                   }
                   setVersions(r?.data?.versions || []);
-                  toast.success(`${(r?.data?.versions || []).length} نسخه`);
+                  toast.success(`${(r?.data?.versions || []).length} versions`);
                 })
               }
             >
-              لیست نسخه‌ها
+              List versions
             </Button>
           </div>
           <div className="max-h-36 overflow-y-auto space-y-1">
@@ -658,17 +658,17 @@ export default function LabPage() {
                   onClick={() =>
                     run('rb', async () => {
                       await api.post('/api/lab/rollback', { versionId: v.id });
-                      toast.success('Rollback انجام شد — چند ثانیه صبر کن');
+                      toast.success('Rollback done — wait a few seconds');
                     })
                   }
                 >
-                  برگشت
+                  Revert
                 </button>
               </div>
             ))}
             {!versions.length && (
               <p className="text-xs text-[var(--text-muted)]">
-                اول توکن CF را در Admin ذخیره کن، بعد لیست را بگیر.
+                Save CF token in Admin first, then fetch the list.
               </p>
             )}
           </div>
@@ -676,7 +676,7 @@ export default function LabPage() {
 
         <BentoCell span={12}>
           <p className="font-display font-semibold text-sm mb-3 flex items-center gap-2">
-            <Server size={14} /> Multi-node (چند Worker)
+            <Server size={14} /> Multi-node (multiple Workers)
           </p>
           <textarea
             className="w-full h-28 text-xs font-mono rounded-lg border border-[var(--stroke)] bg-[var(--bg)] p-2 mb-2"
@@ -691,19 +691,19 @@ export default function LabPage() {
                 try {
                   const nodes = JSON.parse(nodesText || '[]');
                   await api.put('/api/lab/nodes', { nodes });
-                  toast.success('نودها ذخیره شد');
+                  toast.success('Nodes saved');
                 } catch {
-                  toast.error('JSON نامعتبر');
+                  toast.error('Invalid JSON');
                 }
               })
             }
           >
-            ذخیره نودها
+            Save nodes
           </Button>
         </BentoCell>
 
         <BentoCell span={12}>
-          <p className="font-display font-semibold text-sm mb-3">کاتالوگ قابلیت‌ها</p>
+          <p className="font-display font-semibold text-sm mb-3">Feature catalog</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {(data?.features || []).map((f) => (
               <div

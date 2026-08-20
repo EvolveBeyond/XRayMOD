@@ -5,7 +5,7 @@
 export function renderLoginPage(origin: string, panelPrefix: string): Response {
   const prefix = panelPrefix || '';
   const html = `<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
@@ -13,8 +13,8 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
   <title>Login · XrayMOD</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&family=Vazirmatn:wght@500;600;700&display=swap" rel="stylesheet" />
-  <script>window.__API_BASE=${JSON.stringify(origin)};window.__PANEL_PREFIX=${JSON.stringify(prefix)};window.__LANG=localStorage.getItem('xraymod_lang')||'fa';</script>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script>window.__API_BASE=${JSON.stringify(origin)};window.__PANEL_PREFIX=${JSON.stringify(prefix)};</script>
   <style>
     :root {
       --bg: #060b12;
@@ -31,7 +31,7 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       min-height: 100vh;
-      font-family: Vazirmatn, Manrope, ui-sans-serif, system-ui, sans-serif;
+      font-family: Manrope, ui-sans-serif, system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
       display: grid;
@@ -90,7 +90,7 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
     }
     h1 {
       text-align: center;
-      font-family: Syne, Vazirmatn, sans-serif;
+      font-family: Syne, sans-serif;
       font-size: 1.55rem; font-weight: 800; letter-spacing: -.03em;
     }
     h1 span { color: var(--accent); }
@@ -123,7 +123,6 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
       font-family: inherit;
     }
     .toggle:hover { color: var(--muted); }
-    [dir="rtl"] input.has-toggle { padding-left: 3rem; padding-right: 1rem; }
     .btn {
       width: 100%; margin-top: .35rem;
       padding: 1rem;
@@ -171,29 +170,25 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
     <div class="card">
       <div class="logo" aria-hidden="true"></div>
       <h1>Xray<span>MOD</span></h1>
-      <p class="sub">ورود امن به داشبورد</p>
+      <p class="sub">Secure panel sign-in</p>
 
       <form id="f" autocomplete="on">
         <div class="field">
-          <label for="user">نام کاربری / ایمیل</label>
+          <label for="user">Username / email</label>
           <input id="user" name="username" type="text" value="" autocomplete="username" required placeholder="admin" dir="ltr" />
         </div>
         <div class="field">
-          <label for="pass">رمز عبور</label>
+          <label for="pass">Password</label>
           <input id="pass" class="has-toggle" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" dir="ltr" />
-          <button type="button" class="toggle" id="eye" aria-label="toggle">نمایش</button>
+          <button type="button" class="toggle" id="eye" aria-label="toggle">Show</button>
         </div>
         <div class="field" id="totpWrap" style="display:none">
-          <label for="totp">کد Authenticator</label>
+          <label for="totp">Authenticator code</label>
           <input id="totp" name="totp" type="text" inputmode="numeric" maxlength="6" placeholder="000000" style="text-align:center;letter-spacing:.35em;font-family:ui-monospace,monospace" />
         </div>
         <div class="err" id="err"></div>
-        <button class="btn" id="go" type="submit">ورود به پنل</button>
+        <button class="btn" id="go" type="submit">Sign in</button>
       </form>
-    </div>
-    <div class="langs">
-      <button type="button" id="langFa" class="lang on">FA</button>
-      <button type="button" id="langEn" class="lang">EN</button>
     </div>
     <p class="foot" id="foot">SECURE PATH · private entry<br/>Unauthorized requests return 404</p>
   </div>
@@ -209,40 +204,19 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
   var pass = document.getElementById('pass');
   var totpWrap = document.getElementById('totpWrap');
   var challenge = null;
-  var lang = localStorage.getItem('xraymod_lang') || 'fa';
-  var i18n = {
-    fa: { title: 'ورود امن به داشبورد', user: 'نام کاربری / ایمیل', pass: 'رمز عبور', go: 'ورود به پنل', show: 'نمایش', hide: 'مخفی', bad: 'نام کاربری یا رمز اشتباه است', net: 'خطای شبکه — دوباره تلاش کنید', ok: 'موفق — در حال انتقال...' },
-    en: { title: 'Secure panel sign-in', user: 'Username / email', pass: 'Password', go: 'Sign in', show: 'Show', hide: 'Hide', bad: 'Invalid username or password', net: 'Network error — try again', ok: 'OK — redirecting...' }
+  var t = {
+    show: 'Show', hide: 'Hide', bad: 'Invalid username or password',
+    net: 'Network error — try again', ok: 'OK — redirecting...'
   };
-  function setLangBtn() {
-    document.getElementById('langFa').className = 'lang' + (lang==='fa' ? ' on' : '');
-    document.getElementById('langEn').className = 'lang' + (lang==='en' ? ' on' : '');
-  }
-  function applyLang() {
-    var t = i18n[lang] || i18n.fa;
-    document.documentElement.lang = lang;
-    document.documentElement.dir = lang === 'fa' ? 'rtl' : 'ltr';
-    var sub = document.querySelector('.sub'); if (sub) sub.textContent = t.title;
-    var labs = document.querySelectorAll('label');
-    if (labs[0]) labs[0].textContent = t.user;
-    if (labs[1]) labs[1].textContent = t.pass;
-    go.textContent = t.go;
-    eye.textContent = pass.type === 'password' ? t.show : t.hide;
-    setLangBtn();
-  }
-  document.getElementById('langFa').onclick = function(){ lang='fa'; localStorage.setItem('xraymod_lang','fa'); applyLang(); };
-  document.getElementById('langEn').onclick = function(){ lang='en'; localStorage.setItem('xraymod_lang','en'); applyLang(); };
-  applyLang();
 
   eye.addEventListener('click', function () {
     var show = pass.type === 'password';
     pass.type = show ? 'text' : 'password';
-    var t = i18n[lang] || i18n.fa;
     eye.textContent = show ? t.hide : t.show;
   });
 
   function showError(msg) {
-    err.textContent = msg || 'خطا';
+    err.textContent = msg || 'Error';
     err.classList.add('show');
   }
   function clearError() {
@@ -256,7 +230,7 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
     clearError();
     go.disabled = true;
     var old = go.innerHTML;
-    go.innerHTML = 'در حال ورود <span class="spin"></span>';
+    go.innerHTML = 'Signing in <span class="spin"></span>';
 
     var body;
     if (challenge) {
@@ -284,23 +258,21 @@ export function renderLoginPage(origin: string, panelPrefix: string): Response {
         document.getElementById('totp').required = true;
         document.getElementById('totp').focus();
         go.disabled = false;
-        go.innerHTML = 'تأیید کد';
+        go.innerHTML = 'Verify code';
         return;
       }
 
       if (data.success) {
-        go.innerHTML = 'موفق — در حال انتقال...';
+        go.innerHTML = t.ok;
         location.replace(PREFIX + '/panel');
         return;
       }
 
-      var tt = i18n[lang] || i18n.fa;
-      showError(data.message || data.error || tt.bad);
+      showError(data.message || data.error || t.bad);
       go.disabled = false;
       go.innerHTML = old;
     } catch (err2) {
-      var tt2 = i18n[lang] || i18n.fa;
-      showError(tt2.net);
+      showError(t.net);
       go.disabled = false;
       go.innerHTML = old;
     }

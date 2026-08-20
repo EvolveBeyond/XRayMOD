@@ -158,7 +158,7 @@ export async function handleCleanIP(
           uuid: admin.uuid,
           workerHost,
           path,
-          name: 'XrayMOD · پیشنهادی',
+          name: 'XrayMOD · Recommended',
           cleanIPs: merged,
           max: 18,
           carrier: detectIranianISP(request),
@@ -177,7 +177,7 @@ export async function handleCleanIP(
         links: links.slice(0, 8),
         subscriptionUrl: subUrl,
         message:
-          'ساب پیشنهادی آماده است — Clean IPهای کشور خوب ذخیره شدند و داخل ساب می‌آیند',
+          'Recommended subscription ready — good country Clean IPs saved and included in the sub',
       },
     });
   }

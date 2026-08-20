@@ -67,7 +67,7 @@ export default function ConfigPage() {
   const [hosts, setHosts] = useState<string[]>([]);
   const [newHost, setNewHost] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setذخیرهd] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings').then((res) => {
@@ -138,8 +138,8 @@ export default function ConfigPage() {
         'panel.monthly_cap_gb': String(Number(config.monthlyCapGb) || 0),
         'panel.isp_aware_sub': String(config.ispAware),
       });
-      setذخیرهd(true);
-      setTimeout(() => setذخیرهd(false), 2000);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch { /* ignore */ }
     setSaving(false);
   };
@@ -174,7 +174,7 @@ export default function ConfigPage() {
           </Button>
           <Button onClick={save} disabled={saving}>
             {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-            {saved ? 'ذخیرهd!' : 'ذخیره'}
+            {saved ? 'Saved!' : 'Save'}
           </Button>
         </div>
       </div>

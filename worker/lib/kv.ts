@@ -1,11 +1,11 @@
 /**
  * KV Helper — D1-backed key-value storage with in-memory cache
  *
- * وقتی KV binding نباشه، از D1 kvstore table استفاده می‌کنه.
- * با cache در حافظه برای کاهش خواندن از D1.
+ * When no KV binding exists, uses the D1 kvstore table.
+ * Uses in-memory cache to reduce D1 reads.
  */
 
-const CACHE_TTL = 60_000; // 60 ثانیه
+const CACHE_TTL = 60_000; // 60 seconds
 const cache = new Map<string, { value: string; expires: number }>();
 
 export interface KVStore {
@@ -16,11 +16,11 @@ export interface KVStore {
 }
 
 /**
- * ایجاد KV store بر اساس binding موجود
- * اگه KV باشه از KV استفاده می‌کنه، وگرنه از D1
+ * Create KV store based on available binding
+ * Uses KV if bound, otherwise D1
  */
 export function createKV(env: any): KVStore {
-  // اگه KV namespace binding موجود باشه
+  // If KV namespace binding exists
   if (env.KV?.get) {
     return {
       async get(key) {
@@ -39,23 +39,23 @@ export function createKV(env: any): KVStore {
     };
   }
 
-  // D1-backed KV با cache
+  // D1-backed KV with cache
   return {
     async get(key: string): Promise<string | null> {
-      // بررسی cache
+      // Check cache
       const cached = cache.get(key);
       if (cached && cached.expires > Date.now()) {
         return cached.value;
       }
 
-      // خواندن از D1
+      // Read from D1
       const row = (await env.DB.prepare('SELECT v FROM kvstore WHERE k = ?')
         .bind(key)
         .first()) as { v: string } | null;
 
       const value = row?.v ?? null;
 
-      // ذخیره در cache
+      // Store in cache
       if (value !== null) {
         cache.set(key, { value, expires: Date.now() + CACHE_TTL });
       }
@@ -64,14 +64,14 @@ export function createKV(env: any): KVStore {
     },
 
     async put(key: string, value: string): Promise<void> {
-      // ذخیره در D1
+      // Store in D1
       await env.DB.prepare(
         'INSERT OR REPLACE INTO kvstore (k, v, updated) VALUES (?, ?, ?)'
       )
         .bind(key, value, Date.now())
         .run();
 
-      // بروزرسانی cache
+      // Update cache
       cache.set(key, { value, expires: Date.now() + CACHE_TTL });
     },
 
@@ -103,7 +103,7 @@ export function createKV(env: any): KVStore {
 }
 
 /**
- * پاک کردن cache (برای تست)
+ * Clear cache (for testing)
  */
 export function clearCache(): void {
   cache.clear();

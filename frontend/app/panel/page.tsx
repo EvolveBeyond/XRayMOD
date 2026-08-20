@@ -80,7 +80,7 @@ export default function DashboardPage() {
         apply: true,
       });
       if (res.success === false) {
-        toast.error(res.message || 'ساخت ساب پیشنهادی ناموفق');
+        toast.error(res.message || 'Failed to build recommended subscription');
         return;
       }
       const sub = res?.data?.subscriptionUrl || '';
@@ -91,12 +91,12 @@ export default function DashboardPage() {
         } catch {
           /* ignore */
         }
-        toast.success('ساب پیشنهادی آماده و کپی شد');
+        toast.success('Recommended subscription ready and copied');
       } else {
-        toast.success(res?.data?.message || 'استخر Clean IP به‌روز شد');
+        toast.success(res?.data?.message || 'Clean IP pool updated');
       }
     } catch {
-      toast.error('خطا در ساخت ساب پیشنهادی');
+      toast.error('Error building recommended subscription');
     }
     setRecommendBusy(false);
   };
@@ -121,7 +121,7 @@ export default function DashboardPage() {
             </PanelLink>
             <Button size="sm" variant="secondary" onClick={buildRecommendedSub} disabled={recommendBusy}>
               <Sparkles size={14} />
-              {recommendBusy ? '…' : 'ساب پیشنهادی'}
+              {recommendBusy ? '…' : 'Recommended sub'}
             </Button>
             <PanelLink href="/panel/lab">
               <Button size="sm" variant="secondary">

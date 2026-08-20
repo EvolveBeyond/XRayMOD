@@ -15,13 +15,13 @@ import { api } from '@/lib/api';
 import { Card, CardHeader, Button, Input, Toggle, StatusBadge } from '@/components';
 
 const SKINS = [
-  { id: '404', label: 'Silent 404 (recommended)', desc: 'بدون برند پنل — پاسخ عمومی خطا' },
-  { id: '1101', label: 'CF Error 1101', desc: 'صفحه خطای کلاسیک Cloudflare' },
-  { id: 'nginx', label: 'Nginx Welcome', desc: 'صفحه پیش‌فرض nginx' },
-  { id: 'github', label: 'GitHub 404', desc: 'صفحه not found گیت‌هاب' },
-  { id: 'wordpress', label: 'WordPress Error', desc: 'خطای critical وردپرس' },
+  { id: '404', label: 'Silent 404 (recommended)', desc: 'No panel branding — generic error response' },
+  { id: '1101', label: 'CF Error 1101', desc: 'Classic Cloudflare error page' },
+  { id: 'nginx', label: 'Nginx Welcome', desc: 'Default nginx page' },
+  { id: 'github', label: 'GitHub 404', desc: 'GitHub not found page' },
+  { id: 'wordpress', label: 'WordPress Error', desc: 'WordPress critical error' },
   { id: '1020', label: 'CF Access Denied', desc: 'Access denied 1020' },
-  { id: 'blank', label: 'Blank', desc: 'صفحه خالی سفید' },
+  { id: 'blank', label: 'Blank', desc: 'Blank white page' },
 ];
 
 type AuditRow = {
@@ -105,15 +105,15 @@ export default function StealthPage() {
         'panel.isp_aware_sub': String(ispAware),
       });
       if (res.success === false) {
-        setMsg(res.message || 'خطا در ذخیره');
+        setMsg(res.message || 'Save failed');
       } else {
         setSaved(true);
-        setMsg('ذخیره شد');
+        setMsg('Saved');
         setTimeout(() => setSaved(false), 2000);
         load();
       }
     } catch {
-      setMsg('خطای شبکه');
+      setMsg('Network error');
     }
     setSaving(false);
   };
@@ -131,7 +131,7 @@ export default function StealthPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setMsg('خروجی ناموفق');
+      setMsg('Export failed');
     }
   };
 
@@ -147,13 +147,13 @@ export default function StealthPage() {
         const data = JSON.parse(text);
         const res = await api.post('/api/tools/restore', data);
         if (res.success === false) {
-          setMsg(res.message || 'ورود ناموفق');
+          setMsg(res.message || 'Import failed');
         } else {
-          setMsg(res.message || 'بازیابی شد');
+          setMsg(res.message || 'Restored');
           load();
         }
       } catch {
-        setMsg('فایل نامعتبر');
+        setMsg('Invalid file');
       }
     };
     input.click();
@@ -161,7 +161,7 @@ export default function StealthPage() {
 
   const fmtTime = (t: number) => {
     try {
-      return new Date(t).toLocaleString('fa-IR');
+      return new Date(t).toLocaleString('en-US');
     } catch {
       return String(t);
     }
@@ -170,7 +170,7 @@ export default function StealthPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-zinc-500 text-sm">
-        <RefreshCw className="animate-spin mr-2" size={16} /> در حال بارگذاری...
+        <RefreshCw className="animate-spin mr-2" size={16} /> Loading...
       </div>
     );
   }
@@ -180,15 +180,15 @@ export default function StealthPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-black flex items-center gap-2">
-            <Ghost className="text-emerald-400" size={28} /> حفاظت مبدأ
+            <Ghost className="text-emerald-400" size={28} /> Origin protection
           </h1>
           <p className="text-zinc-500 text-sm mt-1">
-            مسیر پنل را از اسکنر پنهان می‌کند. این استتار ترافیک VPN نیست.
+            Hides panel paths from scanners. This is not VPN traffic camouflage.
           </p>
         </div>
         <Button onClick={save} disabled={saving}>
           {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-          {saved ? 'ذخیره شد!' : 'ذخیره'}
+          {saved ? 'Saved!' : 'Save'}
         </Button>
       </div>
 
@@ -201,43 +201,43 @@ export default function StealthPage() {
       {/* Service guards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader title="کنترل سرویس" description="بدون قطع پنل — فقط ترافیک پروکسی" />
+          <CardHeader title="Service control" description="Panel stays up — proxy traffic only" />
           <div className="space-y-1">
             <Toggle
-              label="توقف سرویس (Kill Switch)"
-              description="همه کانکشن‌های پروکسی → 503"
+              label="Pause service (Kill Switch)"
+              description="All proxy connections → 503"
               checked={paused}
               onChange={setPaused}
             />
             <Toggle
-              label="پروتکل ترکیبی"
-              description="چرخش VLESS / Trojan / SS در ساب"
+              label="Mixed protocol"
+              description="Rotate VLESS / Trojan / SS in sub"
               checked={mixed}
               onChange={setMixed}
             />
             <Toggle
-              label="ساب ISP-aware"
-              description="اولویت endpoint لبه بر اساس ASN/ISP بازدیدکننده"
+              label="ISP-aware sub"
+              description="Prioritize edge endpoints by visitor ASN/ISP"
               checked={ispAware}
               onChange={setIspAware}
             />
             <div className="pt-2">
               <Input
-                label="سقف ماهانه کل پنل (GB)"
+                label="Panel monthly cap (GB)"
                 type="number"
                 value={monthlyCap}
                 onChange={(e) => setMonthlyCap(e.target.value)}
-                placeholder="0 = بدون سقف"
+                placeholder="0 = no cap"
               />
-              <p className="text-[11px] text-zinc-600 mt-1">۰ یعنی نامحدود. بعد از پر شدن → 503</p>
+              <p className="text-[11px] text-zinc-600 mt-1">0 means unlimited. After cap is reached → 503</p>
             </div>
           </div>
         </Card>
 
         <Card>
           <CardHeader
-            title="پوستهٔ عمومی (حفاظت مبدأ)"
-            description="وقتی مسیر اشتباه بزنند چه ببینند — اثر انگشت پنل را کم می‌کند، ترافیک را پنهان نمی‌کند"
+            title="Public skin (origin protection)"
+            description="What wrong paths show — reduces panel fingerprint, does not hide traffic"
           />
           <div className="grid grid-cols-2 gap-2">
             {SKINS.map((s) => (
@@ -261,71 +261,71 @@ export default function StealthPage() {
 
       {/* Secret paths */}
       <Card>
-        <CardHeader title="مسیرهای مخفی" description="مسیر واقعی پنل را عوض کن — مسیرهای لو رفته decoy می‌شوند" />
+        <CardHeader title="Secret paths" description="Change real panel paths — leaked paths become decoys" />
         <div className="space-y-1 mb-4">
           <Toggle
-            label="فعال‌سازی حفاظت مبدأ"
-            description="مسیرهای secret remap می‌شوند؛ مسیرهای لو رفته پاسخ عمومی می‌گیرند"
+            label="Enable origin protection"
+            description="Secret paths remap; leaked paths get generic responses"
             checked={enabled}
             onChange={setEnabled}
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Input
-            label="مسیر ادمین (بدون /)"
+            label="Admin path (no /)"
             value={adminPath}
             onChange={(e) => setAdminPath(e.target.value)}
-            placeholder="مثلا x-panel"
+            placeholder="e.g. x-panel"
           />
           <Input
-            label="مسیر لاگین"
+            label="Login path"
             value={loginPath}
             onChange={(e) => setLoginPath(e.target.value)}
-            placeholder="مثلا gate"
+            placeholder="e.g. gate"
           />
           <Input
-            label="مسیر ساب"
+            label="Sub path"
             value={subPath}
             onChange={(e) => setSubPath(e.target.value)}
-            placeholder="مثلا get"
+            placeholder="e.g. get"
           />
         </div>
         <p className="text-[11px] text-amber-500/80 mt-3 flex items-start gap-1.5">
           <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-          بعد از ذخیره، URL پنل را یادداشت کن. مسیرهای قدیمی /admin و /login صفحه جعلی می‌دهند.
+          After saving, note the panel URL. Old /admin and /login paths show decoy pages.
         </p>
       </Card>
 
       {/* Canary */}
       <Card>
         <CardHeader
-          title="Canary (طعمه اسکنر)"
-          description="اگر کسی این مسیرها را زد، لاگ می‌شود و decoy می‌بیند"
+          title="Canary (scanner bait)"
+          description="If someone hits these paths, it is logged and they see a decoy"
           action={<StatusBadge status={`${canaryHits} hit`} variant={canaryHits > 0 ? 'warning' : 'default'} />}
         />
         <Input
-          label="مسیرهای طعمه (با کاما)"
+          label="Bait paths (comma-separated)"
           value={canary}
           onChange={(e) => setCanary(e.target.value)}
           placeholder="wp-admin,phpmyadmin,.env"
         />
         <p className="text-[11px] text-zinc-600 mt-2">
-          رایگان · فقط در D1 لاگ می‌شود · پنل را لو نمی‌دهد
+          Free · logged in D1 only · does not expose the panel
         </p>
       </Card>
 
       {/* Backup */}
       <Card>
-        <CardHeader title="پشتیبان کامل" description="تنظیمات + کاربران (بدون هش رمز) + کانفیگ‌ها" />
+        <CardHeader title="Full backup" description="Settings + users (no password hashes) + configs" />
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={exportFull}>
-            <Download size={14} /> خروجی کامل
+            <Download size={14} /> Full export
           </Button>
           <Button variant="secondary" onClick={importFull}>
-            <Upload size={14} /> بازیابی تنظیمات
+            <Upload size={14} /> Restore settings
           </Button>
           <Button variant="secondary" onClick={load}>
-            <RefreshCw size={14} /> تازه‌سازی لاگ
+            <RefreshCw size={14} /> Refresh log
           </Button>
         </div>
       </Card>
@@ -334,7 +334,7 @@ export default function StealthPage() {
       <Card>
         <CardHeader
           title="Audit Log"
-          description="آخرین عملیات ادمین و canary hits"
+          description="Recent admin actions and canary hits"
           action={
             <span className="text-xs text-zinc-500 flex items-center gap-1">
               <Activity size={12} /> {audit.length}
@@ -343,7 +343,7 @@ export default function StealthPage() {
         />
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {audit.length === 0 ? (
-            <p className="text-sm text-zinc-500 text-center py-6">هنوز رویدادی نیست</p>
+            <p className="text-sm text-zinc-500 text-center py-6">No events yet</p>
           ) : (
             audit.map((row, i) => (
               <div
@@ -373,7 +373,7 @@ export default function StealthPage() {
 
       <div className="flex items-center gap-2 text-xs text-zinc-600">
         <Shield size={12} />
-        همه این قابلیت‌ها رایگان‌اند و روی Worker + D1 اجرا می‌شوند — بدون سرویس خارجی پولی.
+        All features are free and run on Worker + D1 — no paid external services.
       </div>
     </div>
   );

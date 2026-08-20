@@ -15,7 +15,7 @@ function escapeHtml(s: string): string {
 }
 
 function fmtBytes(n: number): string {
-  if (!n || n <= 0) return '۰ B';
+  if (!n || n <= 0) return '0 B';
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
   let v = n;
   let i = 0;
@@ -59,29 +59,29 @@ export function renderUserPortal(opts: {
     user.status !== 'active' ||
     (user.expiry_date && new Date(user.expiry_date) < new Date());
   const expireLabel = user.expiry_date
-    ? new Date(user.expiry_date).toLocaleDateString('fa-IR')
-    : 'بدون انقضا';
+    ? new Date(user.expiry_date).toLocaleDateString('en-US')
+    : 'No expiry';
   const daysLabel =
-    dl === null ? 'نامحدود' : dl < 0 ? 'منقضی' : dl === 0 ? 'امروز' : `${dl} روز`;
+    dl === null ? 'Unlimited' : dl < 0 ? 'Expired' : dl === 0 ? 'Today' : `${dl} days`;
 
   const subUrl = `${origin}/sub/${user.uuid}`;
   const meUrl = `${origin}/me/${user.uuid}`;
   const statusColor = expired ? '#f43f5e' : pct >= 90 ? '#f59e0b' : '#10b981';
   const statusText = expired
     ? user.status === 'disabled'
-      ? 'غیرفعال'
-      : 'منقضی'
+      ? 'Disabled'
+      : 'Expired'
     : pct >= 90
-      ? 'حجم رو به اتمام'
-      : 'فعال';
+      ? 'Quota almost used'
+      : 'Active';
 
   const warn =
     !expired && pct >= 80
-      ? `<div class="warn">⚠️ بیش از ${pct}٪ حجم مصرف شده — ${fmtBytes(remain)} باقی‌مانده</div>`
+      ? `<div class="warn">⚠️ Over ${pct}% quota used — ${fmtBytes(remain)} remaining</div>`
       : '';
   const expWarn =
     !expired && dl !== null && dl <= 3 && dl >= 0
-      ? `<div class="warn">⏳ فقط ${daysLabel} تا پایان اعتبار</div>`
+      ? `<div class="warn">⏳ Only ${daysLabel} until expiry</div>`
       : '';
 
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(subUrl)}`;
@@ -96,22 +96,22 @@ export function renderUserPortal(opts: {
           return `<div class="node">
             <div class="node-top"><span class="badge">${i + 1}</span><span class="node-name">${name}</span></div>
             <code>${escapeHtml(l)}</code>
-            <button type="button" class="btn-sm" data-copy="${escapeHtml(l)}">کپی کانفیگ</button>
+            <button type="button" class="btn-sm" data-copy="${escapeHtml(l)}">Copy config</button>
           </div>`;
         })
         .join('')
     : expired
-      ? `<p class="muted center">اکانت فعال نیست — برای تمدید با پشتیبانی تماس بگیر.</p>`
-      : `<p class="muted center">نودی برای نمایش نیست.</p>`;
+      ? `<p class="muted center">Account inactive — contact support to renew.</p>`
+      : `<p class="muted center">No nodes to display.</p>`;
 
   const html = `<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="robots" content="noindex,nofollow"/>
 <meta name="theme-color" content="#050506"/>
-<title>${escapeHtml(user.username)} · وضعیت اشتراک</title>
+<title>${escapeHtml(user.username)} · Subscription status</title>
 <style>
 :root{--bg:#050506;--card:#0e0e12;--line:#27272a;--muted:#71717a;--text:#fafafa;--ok:#10b981;--warn:#f59e0b;--bad:#f43f5e;--r:1.1rem}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -166,51 +166,51 @@ code{display:block;font-size:.6rem;word-break:break-all;color:#71717a;background
 <div class="wrap">
   <div class="brand">
     <div class="logo">X</div>
-    <div><b>XrayMOD</b><span>صفحه وضعیت اشتراک</span></div>
+    <div><b>XrayMOD</b><span>Subscription status page</span></div>
   </div>
 
   <section class="hero">
     <h1>${escapeHtml(user.username)}</h1>
     <div class="pill">● ${statusText}</div>
     <div class="grid">
-      <div class="stat"><label>مصرف شده</label><strong>${fmtBytes(used)}</strong></div>
-      <div class="stat"><label>سقف حجم</label><strong>${limit > 0 ? fmtBytes(limit) : '∞'}</strong></div>
-      <div class="stat"><label>باقی‌مانده</label><strong>${limit > 0 ? fmtBytes(remain) : '∞'}</strong></div>
-      <div class="stat"><label>اعتبار</label><strong>${escapeHtml(daysLabel)}</strong></div>
+      <div class="stat"><label>Used</label><strong>${fmtBytes(used)}</strong></div>
+      <div class="stat"><label>Quota</label><strong>${limit > 0 ? fmtBytes(limit) : '∞'}</strong></div>
+      <div class="stat"><label>Remaining</label><strong>${limit > 0 ? fmtBytes(remain) : '∞'}</strong></div>
+      <div class="stat"><label>Expiry</label><strong>${escapeHtml(daysLabel)}</strong></div>
     </div>
     <div class="bar-wrap">
-      <div class="bar-meta"><span>${pct}٪ مصرف</span><span>انقضا: ${escapeHtml(expireLabel)}</span></div>
+      <div class="bar-meta"><span>${pct}% used</span><span>Expires: ${escapeHtml(expireLabel)}</span></div>
       <div class="bar"><i></i></div>
     </div>
     ${warn}${expWarn}
   </section>
 
   <section class="card">
-    <h2>اتصال سریع <em>${nodeCount} نود · ISP: ${escapeHtml(carrier)}</em></h2>
+    <h2>Quick connect <em>${nodeCount} nodes · ISP: ${escapeHtml(carrier)}</em></h2>
     <div class="qr-row">
       <img src="${qrSrc}" width="112" height="112" alt="QR" loading="lazy"/>
       <div>
-        <p class="t">اسکن QR یا کپی لینک</p>
+        <p class="t">Scan QR or copy link</p>
         <p>Hiddify · v2rayNG · Streisand · NekoBox</p>
         <p class="url">${escapeHtml(subUrl)}</p>
       </div>
     </div>
     <div class="actions">
-      <button type="button" class="btn" data-copy="${escapeHtml(subUrl)}">کپی لینک ساب</button>
-      <button type="button" class="btn ghost" data-copy="${escapeHtml(meUrl)}">کپی صفحه وضعیت</button>
+      <button type="button" class="btn" data-copy="${escapeHtml(subUrl)}">Copy sub link</button>
+      <button type="button" class="btn ghost" data-copy="${escapeHtml(meUrl)}">Copy status page</button>
     </div>
     <div class="formats">
       <a class="main" href="${escapeHtml(subUrl)}">Base64</a>
       <a href="${escapeHtml(subUrl)}?format=raw">Raw</a>
       <a href="${escapeHtml(subUrl)}?format=clash">Clash</a>
       <a href="${escapeHtml(subUrl)}?format=singbox">sing-box</a>
-      <a href="${escapeHtml(subUrl)}?format=html">نودها</a>
+      <a href="${escapeHtml(subUrl)}?format=html">Nodes</a>
     </div>
-    <p class="tip">این صفحه را بوکمارک کن تا همیشه حجم و روز باقی‌مانده را ببینی.</p>
+    <p class="tip">Bookmark this page to always see remaining quota and days.</p>
   </section>
 
   <section class="card">
-    <h2>بهترین کانفیگ‌ها <em>تا ۱۰ مورد پیشنهادی</em></h2>
+    <h2>Best configs <em>up to 10 recommended</em></h2>
     ${nodeItems}
   </section>
 
@@ -221,7 +221,7 @@ document.querySelectorAll('[data-copy]').forEach(function(el){
   el.addEventListener('click',function(){
     var t=el.getAttribute('data-copy')||'';
     navigator.clipboard.writeText(t).then(function(){
-      var old=el.textContent;el.textContent='کپی شد ✓';
+      var old=el.textContent;el.textContent='Copied ✓';
       setTimeout(function(){el.textContent=old},1200);
     });
   });

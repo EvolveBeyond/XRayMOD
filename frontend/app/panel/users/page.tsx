@@ -97,15 +97,15 @@ export default function UsersPage() {
   const copy = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} کپی شد`);
+      toast.success(`${label} copied`);
     } catch {
-      toast.error('کپی نشد');
+      toast.error('Copy failed');
     }
   };
 
   const addUser = async () => {
     if (!addForm.username.trim()) {
-      toast.error('نام کاربری لازم است');
+      toast.error('Username required');
       return;
     }
     try {
@@ -117,7 +117,7 @@ export default function UsersPage() {
         enable: addForm.enable,
       });
       if (res.success === false) {
-        toast.error(res.message || 'خطا');
+        toast.error(res.message || 'Error');
         return;
       }
       const d = res.data || {};
@@ -129,12 +129,12 @@ export default function UsersPage() {
           status: d.status_url || `${typeof window !== 'undefined' ? window.location.origin : ''}${getPanelPrefix()}/me/${uuid}`,
         });
       }
-      toast.success('کاربر ساخته شد');
+      toast.success('User created');
       setShowAdd(false);
       setAddForm({ username: '', email: '', traffic_limit: 100, expiry_days: 30, speed_limit: 0, enable: true });
       loadUsers();
     } catch {
-      toast.error('خطای شبکه');
+      toast.error('Network error');
     }
   };
 
@@ -149,19 +149,19 @@ export default function UsersPage() {
         expiry,
         enable: editForm.enable,
       });
-      toast.success('ذخیره شد');
+      toast.success('Saved');
       setEditingUser(null);
       loadUsers();
     } catch {
-      toast.error('خطا');
+      toast.error('Error');
     }
   };
 
   const deleteUser = async (id: string | number) => {
-    if (!confirm('حذف این کاربر؟')) return;
+    if (!confirm('Delete this user?')) return;
     try {
       await api.delete(`/api/users/${id}`);
-      toast.success('حذف شد');
+      toast.success('Deleted');
       loadUsers();
     } catch {
       /* ignore */
@@ -180,7 +180,7 @@ export default function UsersPage() {
   const resetQuota = async (id: string | number) => {
     try {
       await api.put(`/api/users/${id}`, { used: 0 });
-      toast.success('حجم ریست شد');
+      toast.success('Quota reset');
       loadUsers();
     } catch {
       /* ignore */
@@ -227,18 +227,18 @@ export default function UsersPage() {
   const daysBadge = (u: User) => {
     const d = u.days_left;
     if (d === null || d === undefined) return <span className="text-[10px] text-zinc-600">∞</span>;
-    if (d < 0) return <span className="text-[10px] text-rose-400 font-bold">منقضی</span>;
-    if (d <= 3) return <span className="text-[10px] text-amber-400 font-bold">{d} روز</span>;
-    return <span className="text-[10px] text-zinc-400">{d} روز</span>;
+    if (d < 0) return <span className="text-[10px] text-rose-400 font-bold">Expired</span>;
+    if (d <= 3) return <span className="text-[10px] text-amber-400 font-bold">{d} days</span>;
+    return <span className="text-[10px] text-zinc-400">{d} days</span>;
   };
 
   return (
     <div className="space-y-6 animate-fade-up">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">کاربران</h1>
+          <h1 className="text-3xl font-black tracking-tight">Users</h1>
           <p className="text-zinc-500 text-sm mt-1">
-            {users.length} کاربر · هر کاربر صفحه وضعیت + ساب جدا دارد
+            {users.length} users · each user has a separate status page + sub
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -247,12 +247,12 @@ export default function UsersPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="جستجو..."
+              placeholder="Search..."
               className="w-full sm:w-48 pl-9 pr-3 py-2 bg-zinc-900/80 border border-zinc-800 rounded-xl text-sm focus:outline-none focus:border-emerald-500"
             />
           </div>
           <Button onClick={() => setShowAdd(true)}>
-            <Plus size={14} /> افزودن
+            <Plus size={14} /> Add
           </Button>
         </div>
       </div>
@@ -260,7 +260,7 @@ export default function UsersPage() {
       {createdLinks && (
         <Card className="border-emerald-500/30 bg-emerald-500/5">
           <CardHeader
-            title={`لینک‌های ${createdLinks.user}`}
+            title={`Links for ${createdLinks.user}`}
             action={
               <Button variant="ghost" size="sm" onClick={() => setCreatedLinks(null)}>
                 <X size={14} />
@@ -269,24 +269,24 @@ export default function UsersPage() {
           />
           <div className="space-y-3">
             <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-              <p className="text-[10px] font-bold text-emerald-400 mb-1">صفحه وضعیت (برای کاربر)</p>
+              <p className="text-[10px] font-bold text-emerald-400 mb-1">Status page (for user)</p>
               <p className="text-xs font-mono break-all text-zinc-300">{createdLinks.status}</p>
               <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="secondary" onClick={() => copy(createdLinks.status, 'صفحه وضعیت')}>
-                  <Copy size={12} /> کپی
+                <Button size="sm" variant="secondary" onClick={() => copy(createdLinks.status, 'Status page')}>
+                  <Copy size={12} /> Copy
                 </Button>
                 <a href={createdLinks.status} target="_blank" rel="noreferrer">
                   <Button size="sm" variant="secondary">
-                    <ExternalLink size={12} /> باز کردن
+                    <ExternalLink size={12} /> Open
                   </Button>
                 </a>
               </div>
             </div>
             <div className="p-3 rounded-xl bg-zinc-950/80 border border-zinc-800">
-              <p className="text-[10px] font-bold text-blue-400 mb-1">لینک ساب (کلاینت)</p>
+              <p className="text-[10px] font-bold text-blue-400 mb-1">Sub link (client)</p>
               <p className="text-xs font-mono break-all text-zinc-300">{createdLinks.sub}</p>
-              <Button size="sm" variant="secondary" className="mt-2" onClick={() => copy(createdLinks.sub, 'ساب')}>
-                <Copy size={12} /> کپی ساب
+              <Button size="sm" variant="secondary" className="mt-2" onClick={() => copy(createdLinks.sub, 'Sub')}>
+                <Copy size={12} /> Copy sub
               </Button>
             </div>
           </div>
@@ -296,7 +296,7 @@ export default function UsersPage() {
       {showAdd && (
         <Card>
           <CardHeader
-            title="کاربر جدید"
+            title="New user"
             action={
               <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>
                 <X size={14} />
@@ -305,34 +305,34 @@ export default function UsersPage() {
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="نام کاربری"
+              label="Username"
               value={addForm.username}
               onChange={(e) => setAddForm({ ...addForm, username: e.target.value })}
-              placeholder="مثلا ali"
+              placeholder="e.g. ali"
             />
             <Input
-              label="ایمیل (اختیاری)"
+              label="Email (optional)"
               type="email"
               value={addForm.email}
               onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
             />
             <Input
-              label="سقف ترافیک (GB)"
+              label="Traffic limit (GB)"
               type="number"
               value={addForm.traffic_limit}
               onChange={(e) => setAddForm({ ...addForm, traffic_limit: Number(e.target.value) })}
             />
             <Input
-              label="اعتبار (روز)"
+              label="Expiry (days)"
               type="number"
               value={addForm.expiry_days}
               onChange={(e) => setAddForm({ ...addForm, expiry_days: Number(e.target.value) })}
             />
           </div>
           <div className="flex gap-2 mt-4">
-            <Button onClick={addUser}>ایجاد + لینک‌ها</Button>
+            <Button onClick={addUser}>Create + links</Button>
             <Button variant="secondary" onClick={() => setShowAdd(false)}>
-              انصراف
+              Cancel
             </Button>
           </div>
         </Card>
@@ -342,7 +342,7 @@ export default function UsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <Card className="w-full max-w-lg">
             <CardHeader
-              title={`ویرایش: ${editingUser.username}`}
+              title={`Edit: ${editingUser.username}`}
               action={
                 <Button variant="ghost" size="sm" onClick={() => setEditingUser(null)}>
                   <X size={14} />
@@ -352,8 +352,8 @@ export default function UsersPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="Username" value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} />
               <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
-              <Input label="سقف (GB)" type="number" value={editForm.traffic_limit} onChange={(e) => setEditForm({ ...editForm, traffic_limit: Number(e.target.value) })} />
-              <Input label="اعتبار (روز)" type="number" value={editForm.expiry_days} onChange={(e) => setEditForm({ ...editForm, expiry_days: Number(e.target.value) })} />
+              <Input label="Limit (GB)" type="number" value={editForm.traffic_limit} onChange={(e) => setEditForm({ ...editForm, traffic_limit: Number(e.target.value) })} />
+              <Input label="Expiry (days)" type="number" value={editForm.expiry_days} onChange={(e) => setEditForm({ ...editForm, expiry_days: Number(e.target.value) })} />
               <label className="flex items-center gap-2 cursor-pointer pt-6">
                 <input
                   type="checkbox"
@@ -361,13 +361,13 @@ export default function UsersPage() {
                   onChange={(e) => setEditForm({ ...editForm, enable: e.target.checked })}
                   className="w-4 h-4 rounded"
                 />
-                <span className="text-sm">فعال</span>
+                <span className="text-sm">Active</span>
               </label>
             </div>
             <div className="flex gap-2 mt-6">
-              <Button onClick={updateUser}>ذخیره</Button>
+              <Button onClick={updateUser}>Save</Button>
               <Button variant="secondary" onClick={() => setEditingUser(null)}>
-                انصراف
+                Cancel
               </Button>
             </div>
           </Card>
@@ -384,12 +384,12 @@ export default function UsersPage() {
         <Card>
           <EmptyState
             icon={UsersIcon}
-            title={search ? 'کاربری پیدا نشد' : 'هنوز کاربری نیست'}
-            description="اولین کاربر را بساز — خودکار ساب + صفحه وضعیت می‌گیرد."
+            title={search ? 'No users found' : 'No users yet'}
+            description="Create the first user — sub + status page are generated automatically."
             action={
               !search ? (
                 <Button onClick={() => setShowAdd(true)}>
-                  <Plus size={14} /> افزودن کاربر
+                  <Plus size={14} /> Add user
                 </Button>
               ) : undefined
             }
@@ -424,47 +424,47 @@ export default function UsersPage() {
                       <span>{formatGB(lim)}</span>
                     </div>
                     <ProgressBar value={used} max={lim || 1} size="sm" color={pct >= 90 ? 'amber' : 'emerald'} />
-                    <p className="text-[10px] text-zinc-600 mt-1">انقضا: {formatDate(user.expiry_date)}</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">Expires: {formatDate(user.expiry_date)}</p>
                   </div>
 
                   <div className="flex items-center flex-wrap gap-1 justify-end shrink-0">
                     <button
-                      onClick={() => copy(statusUrl(user), 'صفحه وضعیت')}
+                      onClick={() => copy(statusUrl(user), 'Status page')}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
-                      title="کپی صفحه وضعیت"
+                      title="Copy status page"
                     >
-                      <LayoutDashboard size={12} /> وضعیت
+                      <LayoutDashboard size={12} /> Status
                     </button>
                     <button
-                      onClick={() => copy(subUrl(user), 'لینک ساب')}
+                      onClick={() => copy(subUrl(user), 'Sub link')}
                       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
-                      title="کپی ساب"
+                      title="Copy sub"
                     >
-                      <Link2 size={12} /> ساب
+                      <Link2 size={12} /> Sub
                     </button>
                     <a
                       href={statusUrl(user)}
                       target="_blank"
                       rel="noreferrer"
                       className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-400 hover:bg-zinc-800 transition-colors"
-                      title="باز کردن صفحه کاربر"
+                      title="Open user page"
                     >
                       <ExternalLink size={14} />
                     </a>
-                    <button onClick={() => openEdit(user)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" title="ویرایش">
+                    <button onClick={() => openEdit(user)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" title="Edit">
                       <Edit2 size={14} />
                     </button>
                     <button
                       onClick={() => toggleUser(user.id, user.enable === false)}
                       className="p-1.5 rounded-lg text-zinc-500 hover:text-amber-400 hover:bg-zinc-800"
-                      title={user.enable !== false ? 'غیرفعال' : 'فعال'}
+                      title={user.enable !== false ? 'Disable' : 'Enable'}
                     >
                       {user.enable !== false ? <Ban size={14} /> : <CheckCircle size={14} />}
                     </button>
-                    <button onClick={() => resetQuota(user.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" title="ریست حجم">
+                    <button onClick={() => resetQuota(user.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 hover:bg-zinc-800" title="Reset quota">
                       <Zap size={14} />
                     </button>
-                    <button onClick={() => deleteUser(user.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800" title="حذف">
+                    <button onClick={() => deleteUser(user.id)} className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800" title="Delete">
                       <Trash2 size={14} />
                     </button>
                   </div>

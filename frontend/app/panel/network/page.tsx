@@ -76,7 +76,7 @@ const defaultSettings: NetworkSettings = {
 export default function NetworkPage() {
   const [settings, setSettings] = useState<NetworkSettings>(defaultSettings);
   const [saving, setSaving] = useState(false);
-  const [saved, setذخیرهd] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api.get('/api/settings').then((res) => {
@@ -106,8 +106,8 @@ export default function NetworkPage() {
         'panel.warp': String(settings.enableWarp),
         'panel.ipv6': String(settings.enableIPv6),
       });
-      setذخیرهd(true);
-      setTimeout(() => setذخیرهd(false), 2000);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch { /* ignore */ }
     setSaving(false);
   };
@@ -121,12 +121,12 @@ export default function NetworkPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black">شبکه</h1>
-          <p className="text-zinc-500 text-sm mt-1">مسیریابی، DNS، WARP و اتصال</p>
+          <h1 className="text-3xl font-black">Network</h1>
+          <p className="text-zinc-500 text-sm mt-1">Routing, DNS, WARP and connectivity</p>
         </div>
         <Button onClick={save} disabled={saving}>
           {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-          {saved ? 'ذخیرهd!' : 'ذخیره'}
+          {saved ? 'Saved!' : 'Save'}
         </Button>
       </div>
 

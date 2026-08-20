@@ -78,9 +78,9 @@ def banner() -> None:
     print(
         f"""
 {G}╔══════════════════════════════════════════════════╗
-║{B}   XrayMOD  ·  نصب خودکار اوپن‌سورس             {N}{G}║
-║{DIM}   فقط ۳ ورودی: توکن → یوزر → رمز              {N}{G}║
-║{DIM}   پشتیبانی: t.me/MRROBOT_DT                     {N}{G}║
+║{B}   XrayMOD  ·  Open-source auto install             {N}{G}║
+║{DIM}   Only 3 inputs: token → user → password              {N}{G}║
+║{DIM}   Support: t.me/MRROBOT_DT                     {N}{G}║
 ╚══════════════════════════════════════════════════╝{N}
 """
     )
@@ -188,12 +188,12 @@ def _which(name: str) -> str | None:
 
 
 def ensure_tools() -> None:
-    info("بررسی ابزارها...")
+    info("Checking tools...")
     if not _which("node"):
-        err("Node.js لازم است: https://nodejs.org")
+        err("Node.js required: https://nodejs.org")
         sys.exit(1)
     if not _which("npm"):
-        err("npm پیدا نشد")
+        err("npm not found")
         sys.exit(1)
     node = _which("node") or "node"
     ok(f"Node {subprocess.check_output([node, '-v'], text=True).strip()}")
@@ -218,21 +218,21 @@ def run(cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> Non
 
 
 def ensure_deps() -> None:
-    info("نصب وابستگی‌ها (npm)...")
+    info("Installing dependencies (npm)...")
     if not (REPO_ROOT / "node_modules").exists():
         run(["npm", "install", "--no-fund", "--no-audit"])
     fe = REPO_ROOT / "frontend" / "node_modules"
     if not fe.exists():
         run(["npm", "install", "--prefix", "frontend", "--no-fund", "--no-audit"])
-    ok("Dependencies آماده")
+    ok("Dependencies ready")
 
 
 def build_ui() -> None:
-    info("ساخت رابط کاربری...")
+    info("Building UI...")
     run(["npm", "run", "build:ui"])
     if not (REPO_ROOT / "frontend" / "out" / "index.html").exists():
-        raise RuntimeError("frontend/out ساخته نشد")
-    ok("UI build شد")
+        raise RuntimeError("frontend/out was not built")
+    ok("UI built")
 
 def create_or_get_d1(token: str, account_id: str, name: str) -> str:
     """Idempotent D1 provisioning. account_id is authoritative — no re-discovery."""
@@ -242,9 +242,9 @@ def create_or_get_d1(token: str, account_id: str, name: str) -> str:
     if not d1_id:
         raise RuntimeError(f"D1 provisioning returned no id: {result!r}")
     if result.get("reused"):
-        ok(f"D1 موجود: {name}")
+        ok(f"D1 exists: {name}")
     else:
-        ok(f"D1 ساخته شد: {name}")
+        ok(f"D1 created: {name}")
     return d1_id
 
 
@@ -288,7 +288,7 @@ PANEL_RECOVERY = "false"
 CRYPTO_KEY = ""
 '''
     (REPO_ROOT / "wrangler.toml").write_text(content)
-    ok("wrangler.toml به‌روز شد")
+    ok("wrangler.toml updated")
 
 
 def deploy_worker(token: str, account_id: str, worker_name: str) -> str:
@@ -297,7 +297,7 @@ def deploy_worker(token: str, account_id: str, worker_name: str) -> str:
     ``account_id`` is the authoritative account — it is not re-discovered
     inside the function. The returned URL is based on this account.
     """
-    info("دیپلوی Worker...")
+    info("Deploying Worker...")
     env = {"CLOUDFLARE_API_TOKEN": token}
     # npx wrangler deploy
     run(["npx", "wrangler", "deploy"], env=env)
@@ -483,7 +483,7 @@ def _post_install(worker_url: str, username: str, password: str) -> dict:
             data = result.get("json")
             if data and data.get("success"):
                 if "insecure" in name:
-                    info("اتصال با حالت سازگار SSL برقرار شد")
+                    info("Connected with SSL compatibility mode")
                 return data
             if data and data.get("error"):
                 # Logical API error (not transport) — stop early for some cases
@@ -517,7 +517,7 @@ def verify_worker_url(worker_url: str, retries: int = 6, delay: float = 3.0) -> 
                     return True
         except httpx.HTTPError:
             if i < retries - 1:
-                info(f"تلاش {i + 1}/{retries} — منتظر edge/DNS...")
+                info(f"Attempt {i + 1}/{retries} — waiting for edge/DNS...")
                 time.sleep(delay + i * 1.5)
         except Exception:
             if i < retries - 1:
@@ -526,8 +526,8 @@ def verify_worker_url(worker_url: str, retries: int = 6, delay: float = 3.0) -> 
 
 
 def bootstrap_remote(worker_url: str, username: str, password: str, retries: int = 18) -> dict:
-    info("راه‌اندازی پنل (bootstrap)...")
-    info(f"هدف: {worker_url}/install")
+    info("Bootstrapping panel...")
+    info(f"Target: {worker_url}/install")
     last_err = ""
     # workers.dev SSL / DNS can lag a bit after first deploy
     time.sleep(5)
@@ -535,7 +535,7 @@ def bootstrap_remote(worker_url: str, username: str, password: str, retries: int
         try:
             data = _post_install(worker_url, username, password)
             if data.get("success"):
-                ok("پنل آماده شد")
+                ok("Panel ready")
                 return data
             last_err = data.get("error") or json.dumps(data, ensure_ascii=False)[:200]
             # already installed — surface clearly
@@ -544,12 +544,12 @@ def bootstrap_remote(worker_url: str, username: str, password: str, retries: int
         except Exception as e:
             last_err = str(e)
             if i == 0 or i % 3 == 0:
-                info(f"تلاش {i + 1}/{retries} — منتظر edge/SSL...")
+                info(f"Attempt {i + 1}/{retries} — waiting for edge/SSL...")
         time.sleep(min(2 + i * 0.4, 8))
     raise RuntimeError(
         f"Bootstrap failed: {last_err}\n"
         f"  Worker URL: {worker_url}\n"
-        f"  اگر Worker در مرورگر باز می‌شود، یک‌بار دیگر نصب را بزن یا از VPN/شبکه دیگر امتحان کن."
+        f"  If the Worker opens in a browser, retry install once or try a different network/VPN."
     )
 
 
@@ -557,28 +557,28 @@ def print_success(data: dict, worker_url: str) -> None:
     print(
         f"""
 {G}╔══════════════════════════════════════════════╗
-║{B}            نصب با موفقیت انجام شد           {N}{G}║
+║{B}            Installation completed successfully           {N}{G}║
 ╚══════════════════════════════════════════════╝{N}
 
-  {B}نام کاربری:{N}  {data.get('username')}
-  {B}رمز عبور:{N}    {data.get('password')}
+  {B}Username:{N}  {data.get('username')}
+  {B}Password:{N}    {data.get('password')}
   {B}Access UUID:{N} {data.get('accessUUID')}
 
-  {C}لینک ورود:{N}
+  {C}Login URL:{N}
   {data.get('loginUrl') or worker_url + '/' + data.get('accessUUID','') + '/login'}
 
-  {C}لینک پنل:{N}
+  {C}Panel URL:{N}
   {data.get('panelUrl')}
 
-  {C}سابسکریپشن:{N}
+  {C}Subscription:{N}
   {data.get('subscriptionUrl')}
 
-  {C}کانفیگ پیشنهادی:{N}
+  {C}Recommended config:{N}
   {data.get('configLink','')[:80]}...
 
-  {Y}پشتیبانی تلگرام:{N} {SUPPORT_TG}
+  {Y}Telegram support:{N} {SUPPORT_TG}
 
-  {DIM}این اطلاعات را ذخیره کن — لینک پنل مخفی است.{N}
+  {DIM}Save this information — the panel URL is private.{N}
 """
     )
 
@@ -588,66 +588,66 @@ def main() -> None:
     ensure_tools()
 
     cfg = load_config()
-    print(f"  {B}[۱/۳] Cloudflare API Token{N}")
-    print(f"  {DIM}بساز از:{N} {C}https://dash.cloudflare.com/profile/api-tokens{N}")
-    print(f"  {DIM}قالب پیشنهادی: Edit Cloudflare Workers{N}\n")
+    print(f"  {B}[1/3] Cloudflare API Token{N}")
+    print(f"  {DIM}Create at:{N} {C}https://dash.cloudflare.com/profile/api-tokens{N}")
+    print(f"  {DIM}Suggested template: Edit Cloudflare Workers{N}\n")
 
-    token = ask("توکن را اینجا بچسبان", "")
+    token = ask("Paste token here", "")
     if not token or len(token) < 20:
-        err("توکن معتبر نیست")
+        err("Invalid token")
         sys.exit(1)
 
-    info("در حال بررسی توکن...")
+    info("Verifying token...")
     try:
         accounts = cf(token, "/accounts?per_page=5")
     except Exception as e:
-        err(f"توکن رد شد: {e}")
-        print(f"  {DIM}Permission لازم: Account Read + Workers Edit + D1 Edit{N}")
+        err(f"Token rejected: {e}")
+        print(f"  {DIM}Required permissions: Account Read + Workers Edit + D1 Edit{N}")
         sys.exit(1)
 
     results = accounts.get("result") or []
     if not results:
-        err("هیچ اکانت Cloudflare پیدا نشد")
+        err("No Cloudflare account found")
         sys.exit(1)
 
     if len(results) == 1:
         account = results[0]
     else:
-        print("\n  اکانت‌های پیدا شده:")
+        print("\n  Accounts found:")
         for i, a in enumerate(results, 1):
             print(f"    {i}) {a.get('name')}")
-        idx = ask("شماره اکانت را انتخاب کن", "1")
+        idx = ask("Select account number", "1")
         try:
             account = results[int(idx) - 1]
         except Exception:
             account = results[0]
 
     account_id = account["id"]
-    ok(f"متصل به اکانت: {account.get('name')}")
+    ok(f"Connected to account: {account.get('name')}")
 
     print()
-    print(f"  {B}[۲/۳] نام کاربری پنل{N}")
-    username = ask("نام کاربری", "admin")
+    print(f"  {B}[2/3] Panel username{N}")
+    username = ask("Username", "admin")
     if not re.match(r"^[\w.-]{3,32}$", username):
-        err("نام کاربری نامعتبر (۳–۳۲ کاراکتر لاتین/عدد)")
+        err("Invalid username (3–32 alphanumeric chars)")
         sys.exit(1)
 
     print()
-    print(f"  {B}[۳/۳] رمز عبور پنل{N}")
-    password = ask("رمز عبور (Enter = ساخت خودکار)", "", secret=True)
+    print(f"  {B}[3/3] Panel password{N}")
+    password = ask("Password (Enter = auto-generate)", "", secret=True)
     if password and len(password) < 6:
-        err("رمز حداقل ۶ کاراکتر")
+        err("Password must be at least 6 characters")
         sys.exit(1)
     if not password:
         password = secrets.token_urlsafe(12)
-        ok(f"رمز خودکار: {password}")
+        ok(f"Auto-generated password: {password}")
 
     # Defaults for open-source simplicity — no extra questions
     worker_name = re.sub(r"[^a-z0-9-]", "-", (cfg.get("worker_name") or "xraymod").lower())[:40] or "xraymod"
     d1_name = "xraymod-db"
     print()
     info(f"Worker: {worker_name} · D1: {d1_name}")
-    info("در حال ساخت پنل... (ممکن است چند دقیقه طول بکشد)")
+    info("Building panel... (may take a few minutes)")
 
     try:
         ensure_deps()
@@ -657,13 +657,13 @@ def main() -> None:
         write_wrangler(d1_id, worker_name)
         worker_url = deploy_worker(token, account_id, worker_name)
         # wait for workers.dev DNS + TLS to settle
-        info("منتظر آماده‌شدن edge (چند ثانیه)...")
+        info("Waiting for edge to be ready (a few seconds)...")
         time.sleep(8)
         # Verify the deployed worker is actually reachable before calling it done
         if not verify_worker_url(worker_url):
             err(f"Worker URL did not become reachable: {worker_url}")
-            print(f"\n  {Y}توجه: دیپلوی انجام شده ولی تأیید دسترسی ناموفق بود.") 
-            print(f"  ورک‌ر ممکن است هنوز در حال انتشار باشد — چند دقیقه بعد بررسی کن: {worker_url}")
+            print(f"\n  {Y}Note: deploy completed but access verification failed.") 
+            print(f"  Worker may still be propagating — check in a few minutes: {worker_url}")
             sys.exit(2)
         data = bootstrap_remote(worker_url, username, password)
         save_config(
@@ -679,7 +679,7 @@ def main() -> None:
         print_success(data, worker_url)
     except Exception as e:
         err(str(e))
-        print(f"\n  {Y}پشتیبانی:{N} {SUPPORT_TG}\n")
+        print(f"\n  {Y}Support:{N} {SUPPORT_TG}\n")
         sys.exit(1)
 
 

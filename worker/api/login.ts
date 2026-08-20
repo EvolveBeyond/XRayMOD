@@ -98,7 +98,7 @@ export async function handleLogin(
       return json(
         {
           success: false,
-          message: 'برای ورود باید همان ایمیل Cloudflare ذخیره‌شده در پنل را بزنید',
+          message: 'Sign in with the Cloudflare email stored in the panel',
         },
         401
       );
@@ -162,7 +162,7 @@ export async function handleLogin(
     if (!valid) {
       await recordLoginAttempt(env.DB, clientIP);
       return json(
-        { success: false, message: 'نام کاربری یا رمز عبور اشتباه است' },
+        { success: false, message: 'Invalid username or password' },
         401
       );
     }

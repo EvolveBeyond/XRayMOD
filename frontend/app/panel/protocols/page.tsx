@@ -81,12 +81,12 @@ export default function ProtocolsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black">پروتکل‌ها</h1>
-          <p className="text-zinc-500 text-sm mt-1">مدیریت پروتکل‌ها و ترنسپورت</p>
+          <h1 className="text-3xl font-black">Protocols</h1>
+          <p className="text-zinc-500 text-sm mt-1">Manage protocols and transports</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowTest(true)}>تست سایت</Button>
-          <Button variant="secondary" onClick={copySubLink}><Copy size={14} /> کپی لینک ساب</Button>
+          <Button variant="secondary" onClick={() => setShowTest(true)}>Site test</Button>
+          <Button variant="secondary" onClick={copySubLink}><Copy size={14} /> Copy sub link</Button>
         </div>
       </div>
 

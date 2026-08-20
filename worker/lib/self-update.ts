@@ -136,42 +136,42 @@ export async function startSelfUpdate(
   await writeJob(env.DB, job);
 
   try {
-    await step(env.DB, job, 'شروع به‌روزرسانی پنل…');
+    await step(env.DB, job, 'Starting panel update…');
 
     if (!token || token.length < 20) {
       throw new Error(
-        'توکن Cloudflare ذخیره نشده. در همین صفحه توکن را ذخیره کنید و دوباره تلاش کنید.'
+        'Cloudflare token not saved. Save the token on this page and try again.'
       );
     }
-    await step(env.DB, job, 'توکن Cloudflare آماده است', true);
+    await step(env.DB, job, 'Cloudflare token ready', true);
 
-    await step(env.DB, job, 'دریافت آخرین commit از GitHub (main)…');
+    await step(env.DB, job, 'Fetching latest commit from GitHub (main)…');
     const latest = await latestMainSha();
-    await step(env.DB, job, `آخرین commit main: ${latest.sha} — ${latest.message}`, true);
+    await step(env.DB, job, `Latest main commit: ${latest.sha} — ${latest.message}`, true);
 
-    await step(env.DB, job, 'بررسی ریلیز rolling (باندل واقعی آپدیت)…');
+    await step(env.DB, job, 'Checking rolling release (actual update bundle)…');
     const rollingSha = await rollingTagSha();
     job.commit = rollingSha;
     if (rollingSha !== latest.sha) {
       await step(
         env.DB,
         job,
-        `هشدار: rolling=${rollingSha} از main=${latest.sha} عقب است — همین باندل rolling دیپلوی می‌شود`,
+        `Warning: rolling=${rollingSha} is behind main=${latest.sha} — deploying this rolling bundle`,
         false
       );
     } else {
-      await step(env.DB, job, `rolling هم‌تراز main است: ${rollingSha}`, true);
+      await step(env.DB, job, `rolling aligned with main: ${rollingSha}`, true);
     }
 
-    await step(env.DB, job, 'شناسایی اکانت و Worker…');
+    await step(env.DB, job, 'Identifying account and Worker…');
     if (!accountId) {
       const accounts = await cf(token, 'GET', '/accounts?per_page=5');
       const list = accounts.result || [];
-      if (!list.length) throw new Error('هیچ اکانت Cloudflare برای این توکن پیدا نشد');
+      if (!list.length) throw new Error('No Cloudflare account found for this token');
       accountId = list[0].id;
       await kvSet(env.DB, 'panel.cf_account_id', accountId);
     }
-    await step(env.DB, job, `اکانت: ${accountId.slice(0, 8)}… · Worker: ${workerName}`, true);
+    await step(env.DB, job, `Account: ${accountId.slice(0, 8)}… · Worker: ${workerName}`, true);
 
     if (!d1Id) {
       const settings = await getScriptSettings(token, accountId, workerName);
@@ -182,25 +182,25 @@ export async function startSelfUpdate(
     }
     if (!d1Id) {
       throw new Error(
-        'شناسه D1 پیدا نشد. یک‌بار از نصب‌کننده/ربات پنل بسازید یا panel.d1_id را ذخیره کنید.'
+        'D1 ID not found. Run the installer/panel bot once or save panel.d1_id.'
       );
     }
-    await step(env.DB, job, `D1 حفظ می‌شود: ${d1Id.slice(0, 8)}…`, true);
+    await step(env.DB, job, `D1 preserved: ${d1Id.slice(0, 8)}…`, true);
 
-    await step(env.DB, job, `دانلود باندل Worker از GitHub (rolling @ ${rollingSha})…`);
+    await step(env.DB, job, `Downloading Worker bundle from GitHub (rolling @ ${rollingSha})…`);
     const moduleBytes = await downloadRollingAsset('worker.mjs', 1000, rollingSha);
     await step(
       env.DB,
       job,
-      `باندل Worker دریافت شد (${Math.round(moduleBytes.byteLength / 1024)} KB)`,
+      `Worker bundle received (${Math.round(moduleBytes.byteLength / 1024)} KB)`,
       true
     );
 
     let assetsJwt: string | null = null;
     try {
-      await step(env.DB, job, 'دانلود باندل UI (assets.tar.gz)…');
+      await step(env.DB, job, 'Downloading UI bundle (assets.tar.gz)…');
       const gz = await downloadRollingAsset('assets.tar.gz', 1000, rollingSha);
-      await step(env.DB, job, `UI فشرده: ${Math.round(gz.byteLength / 1024)} KB`, true);
+      await step(env.DB, job, `UI compressed: ${Math.round(gz.byteLength / 1024)} KB`, true);
       const tar = await gunzip(gz);
       const files = untar(tar);
       if (files.size < 1) throw new Error('assets.tar.gz empty');
@@ -212,14 +212,14 @@ export async function startSelfUpdate(
       await step(
         env.DB,
         job,
-        `UI bundle در دسترس نیست — فقط Worker آپدیت می‌شود (UI قبلی نگه داشته می‌شود): ${msg.slice(0, 120)}`
+        `UI bundle unavailable — only Worker will update (previous UI kept): ${msg.slice(0, 120)}`
       );
       assetsJwt = null;
     }
 
-    await step(env.DB, job, 'دیپلوی روی Cloudflare Workers (بدون پاک شدن کاربران/D1)…');
+    await step(env.DB, job, 'Deploying to Cloudflare Workers (users/D1 not deleted)…');
     await deployWorkerModule(token, accountId, workerName, moduleBytes, d1Id, assetsJwt);
-    await step(env.DB, job, 'دیپلوی با موفقیت انجام شد', true);
+    await step(env.DB, job, 'Deploy succeeded', true);
 
     await kvSet(env.DB, 'panel.version', XRayMOD_VERSION);
     // Record the rolling asset SHA that was actually deployed (not main tip).
@@ -228,14 +228,14 @@ export async function startSelfUpdate(
 
     job.status = 'done';
     job.finishedAt = Date.now();
-    await step(env.DB, job, 'تمام — صفحه را یک‌بار رفرش کنید', true);
+    await step(env.DB, job, 'Done — refresh the page once', true);
     await writeJob(env.DB, job);
     return job;
   } catch (e) {
     job.status = 'error';
     job.error = e instanceof Error ? e.message : String(e);
     job.finishedAt = Date.now();
-    await step(env.DB, job, `خطا: ${job.error}`, false);
+    await step(env.DB, job, `Error: ${job.error}`, false);
     await writeJob(env.DB, job);
     return job;
   }

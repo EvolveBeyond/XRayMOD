@@ -57,18 +57,18 @@ export async function handleLab(
   if (action === 'guest' && request.method === 'GET') {
     const token = url.searchParams.get('token') || '';
     const raw = await kvGet(env.DB, `guest.sub.${token}`);
-    if (!raw) return json({ success: false, message: 'لینک مهمان نامعتبر است' }, 404);
+    if (!raw) return json({ success: false, message: 'Invalid guest link' }, 404);
     try {
       const g = JSON.parse(raw) as { exp: number; userUuid: string; profile?: string };
       if (Date.now() > g.exp) {
         await env.DB.prepare('DELETE FROM kvstore WHERE k = ?').bind(`guest.sub.${token}`).run();
-        return json({ success: false, message: 'لینک مهمان منقضی شده' }, 410);
+        return json({ success: false, message: 'Guest link expired' }, 410);
       }
       const base = await getSecureBase(env.DB, url.origin);
       const profile = g.profile || 'stable';
       return Response.redirect(`${base}/sub/${g.userUuid}?format=base64&profile=${profile}`, 302);
     } catch {
-      return json({ success: false, message: 'خراب' }, 400);
+      return json({ success: false, message: 'Corrupt' }, 400);
     }
   }
 
@@ -159,7 +159,7 @@ export async function handleLab(
       await kvSet(env.DB, 'cleanip.auto_enabled', body.enabled ? 'true' : 'false');
     }
     const result = await refreshAutoCleanIps(env.DB, body.topN || 28);
-    return json({ success: true, data: { result, message: 'استخر Clean-IP شبانه/دستی به‌روز شد' } });
+    return json({ success: true, data: { result, message: 'Nightly/manual Clean-IP pool updated' } });
   }
 
   // POST /api/lab/health-check
@@ -169,7 +169,7 @@ export async function handleLab(
       success: true,
       data: {
         ...result,
-        message: `${result.removed.length} آی‌پی مرده حذف شد · ${result.kept.length} زنده ماند`,
+        message: `${result.removed.length} dead IPs removed · ${result.kept.length} kept alive`,
       },
     });
   }
@@ -177,7 +177,7 @@ export async function handleLab(
   // POST /api/lab/cron-run — manual cron
   if (action === 'cron-run' && request.method === 'POST') {
     await runScheduledEdgeOps(env.DB);
-    return json({ success: true, message: 'Cron edge ops اجرا شد' });
+    return json({ success: true, message: 'Edge ops cron executed' });
   }
 
   // PUT /api/lab/profile
@@ -185,7 +185,7 @@ export async function handleLab(
     type ProfBody = { profile?: SpeedProfile };
     const body: ProfBody = await request.json<ProfBody>().catch(() => ({} as ProfBody));
     const p = (body.profile || 'stable') as SpeedProfile;
-    if (!SPEED_PROFILES[p]) return json({ success: false, message: 'پروفایل نامعتبر' }, 400);
+    if (!SPEED_PROFILES[p]) return json({ success: false, message: 'Invalid profile' }, 400);
     await kvSet(env.DB, 'panel.speed_profile', p);
     return json({ success: true, data: { profile: p, meta: SPEED_PROFILES[p] } });
   }
@@ -202,7 +202,7 @@ export async function handleLab(
       ).first<{ uuid: string }>();
       userUuid = admin?.uuid || '';
     }
-    if (!userUuid) return json({ success: false, message: 'کاربری نیست' }, 400);
+    if (!userUuid) return json({ success: false, message: 'No user found' }, 400);
     const token = crypto.randomUUID().replace(/-/g, '').slice(0, 22);
     const exp = Date.now() + hours * 3600 * 1000;
     await kvSet(
@@ -220,7 +220,7 @@ export async function handleLab(
         expiresAt: exp,
         hours,
         qr: guestUrl,
-        message: `لینک مهمان ${hours} ساعته آماده است`,
+        message: `${hours}-hour guest link ready`,
       },
     });
   }
@@ -240,7 +240,7 @@ export async function handleLab(
     if (typeof body.sub_name === 'string') {
       await kvSet(env.DB, 'panel.sub_name', String(body.sub_name));
     }
-    return json({ success: true, data: next, message: 'وایت‌لیبل ذخیره شد' });
+    return json({ success: true, data: next, message: 'Whitelabel saved' });
   }
 
   // Weighted domains
@@ -269,7 +269,7 @@ export async function handleLab(
     if (body.clear) {
       await kvSet(env.DB, 'canary.report', JSON.stringify({ hits: [], blocked: [] }));
       await kvSet(env.DB, 'canary.blocked_ips', '[]');
-      return json({ success: true, message: 'گزارش پاک شد' });
+      return json({ success: true, message: 'Report cleared' });
     }
     if (body.blockIp) {
       const raw = await kvGet(env.DB, 'canary.blocked_ips');
@@ -303,7 +303,7 @@ export async function handleLab(
       await kvSet(env.DB, 'tls_fragment.enabled', 'true');
       await kvSet(env.DB, 'panel.fingerprint', 'chrome');
     }
-    return json({ success: true, message: `پریست ${preset} اعمال شد` });
+    return json({ success: true, message: `Preset ${preset} applied` });
   }
 
   // Backup
@@ -341,7 +341,7 @@ export async function handleLab(
         configs?: any[];
       }>()
       .catch(() => null);
-    if (!body?.kv) return json({ success: false, message: 'فایل بکاپ نامعتبر' }, 400);
+    if (!body?.kv) return json({ success: false, message: 'Invalid backup file' }, 400);
     let n = 0;
     for (const row of body.kv) {
       if (!row.k || row.k.startsWith('session:')) continue;
@@ -350,7 +350,7 @@ export async function handleLab(
     }
     return json({
       success: true,
-      message: `${n} کلید تنظیمات بازگردانی شد (کاربران موجود حفظ شدند مگر در ایمپورت جدا)`,
+      message: `${n} settings keys restored (existing users kept unless separately imported)`,
     });
   }
 
@@ -374,7 +374,7 @@ export async function handleLab(
     const accountId = await kvGet(env.DB, 'panel.cf_account_id');
     const workerName = await kvGet(env.DB, 'panel.worker_name');
     if (!token || !accountId || !workerName) {
-      return json({ success: false, message: 'توکن/اکانت Cloudflare ذخیره نشده' }, 400);
+      return json({ success: false, message: 'Cloudflare token/account not saved' }, 400);
     }
     const versions = await listWorkerVersions(token, accountId, workerName);
     return json({ success: true, data: { versions, workerName } });
@@ -386,10 +386,10 @@ export async function handleLab(
     const accountId = await kvGet(env.DB, 'panel.cf_account_id');
     const workerName = await kvGet(env.DB, 'panel.worker_name');
     if (!token || !accountId || !workerName || !body.versionId) {
-      return json({ success: false, message: 'پارامتر ناقص' }, 400);
+      return json({ success: false, message: 'Missing parameter' }, 400);
     }
     await rollbackWorkerVersion(token, accountId, workerName, body.versionId);
-    return json({ success: true, message: 'Rollback انجام شد' });
+    return json({ success: true, message: 'Rollback completed' });
   }
 
   // Update job status passthrough
@@ -425,18 +425,18 @@ function defaultBrand() {
 }
 
 export const FEATURE_CATALOG = [
-  { id: 'auto-clean', title: 'Auto Clean-IP شبانه', group: 'speed' },
-  { id: 'health', title: 'Health-check لبه', group: 'speed' },
-  { id: 'profiles', title: 'پروفایل سرعت', group: 'speed' },
-  { id: 'guest', title: 'ساب مهمان ۲۴ساعته + QR', group: 'sub' },
-  { id: 'split', title: 'Split Routing ایران', group: 'sub' },
-  { id: 'failover', title: 'Failover هوشمند', group: 'sub' },
-  { id: 'live', title: 'داشبورد لحظه‌ای', group: 'ux' },
-  { id: 'brand', title: 'وایت‌لیبل', group: 'ux' },
-  { id: 'domains', title: 'دامنه وزنی', group: 'stealth' },
-  { id: 'canary', title: 'Canary حرفه‌ای', group: 'stealth' },
+  { id: 'auto-clean', title: 'Nightly Auto Clean-IP', group: 'speed' },
+  { id: 'health', title: 'Edge health-check', group: 'speed' },
+  { id: 'profiles', title: 'Speed profiles', group: 'speed' },
+  { id: 'guest', title: '24-hour guest sub + QR', group: 'sub' },
+  { id: 'split', title: 'Iran Split Routing', group: 'sub' },
+  { id: 'failover', title: 'Smart Failover', group: 'sub' },
+  { id: 'live', title: 'Live dashboard', group: 'ux' },
+  { id: 'brand', title: 'Whitelabel', group: 'ux' },
+  { id: 'domains', title: 'Weighted domains', group: 'stealth' },
+  { id: 'canary', title: 'Professional Canary', group: 'stealth' },
   { id: 'presets', title: 'Fragment / Reality presets', group: 'stealth' },
-  { id: 'rollback', title: 'Rollback یک‌کلیکی', group: 'ops' },
+  { id: 'rollback', title: 'One-click Rollback', group: 'ops' },
   { id: 'backup', title: 'Backup / Restore', group: 'ops' },
   { id: 'nodes', title: 'Multi-node', group: 'ops' },
 ];

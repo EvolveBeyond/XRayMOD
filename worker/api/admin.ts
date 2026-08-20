@@ -232,8 +232,8 @@ export async function handleAdmin(
         last_applied_commit: last?.v || '',
         has_token,
         how: rollingBehindMain
-          ? 'ریلیز rolling از main عقب است — اول scripts/publish-rolling.sh را روی ریپو اجرا کنید، بعد «بروزرسانی الان».'
-          : 'دکمه «بروزرسانی الان» باندل ریلیز rolling را می‌گیرد و روی همین Worker دیپلوی می‌کند. D1 و کاربران پاک نمی‌شوند.',
+          ? 'Rolling release is behind main — run scripts/publish-rolling.sh on the repo first, then click Update now.'
+          : 'Update now pulls the rolling release bundle and deploys it to this Worker. D1 and users are not deleted.',
       });
     } catch (e) {
       return json({

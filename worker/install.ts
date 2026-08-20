@@ -91,15 +91,15 @@ function esc(s: string): string {
 }
 
 function rowHtml(label: string, value: string): string {
-  return `<div class="card"><div class="lab">${esc(label)}</div><div class="row"><div class="val">${esc(value)}</div><button type="button" class="copy" data-v="${esc(value)}">کپی</button></div></div>`;
+  return `<div class="card"><div class="lab">${esc(label)}</div><div class="row"><div class="val">${esc(value)}</div><button type="button" class="copy" data-v="${esc(value)}">Copy</button></div></div>`;
 }
 
 function renderSetupPage(origin: string): Response {
   const html = `<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>نصب XrayMOD</title>
+<title>Install XrayMOD</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;font-family:system-ui,Tahoma,sans-serif;background:#050506;color:#fafafa;display:grid;place-items:center;padding:1.25rem}
@@ -119,14 +119,14 @@ h1 span{color:#10b981}
 <div class="card">
   <div class="logo">X</div>
   <h1>Xray<span>MOD</span></h1>
-  <p class="sub">با یک کلیک پنل آماده می‌شود:<br/>یوزرنیم، رمز، لینک پنل، ساب و کانفیگ پیشنهادی</p>
-  <button class="btn" id="go" type="button">🚀 نصب خودکار و نمایش اطلاعات</button>
+  <p class="sub">One click sets up the panel:<br/>username, password, panel link, sub and recommended config</p>
+  <button class="btn" id="go" type="button">🚀 Auto install and show details</button>
   <div class="err" id="err"></div>
   <p class="hint">${esc(origin)}</p>
 </div>
 <script>
 document.getElementById('go').onclick=async function(){
-  var b=this;b.disabled=true;b.textContent='در حال نصب...';
+  var b=this;b.disabled=true;b.textContent='Installing...';
   try{
     var r=await fetch('/install',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto:true})});
     var d=await r.json();
@@ -135,8 +135,8 @@ document.getElementById('go').onclick=async function(){
     location.href='/install?creds=1';
   }catch(e){
     document.getElementById('err').style.display='block';
-    document.getElementById('err').textContent=e.message||'خطا';
-    b.disabled=false;b.textContent='🚀 نصب خودکار و نمایش اطلاعات';
+    document.getElementById('err').textContent=e.message||'Error';
+    b.disabled=false;b.textContent='🚀 Auto install and show details';
   }
 };
 </script>
@@ -154,22 +154,22 @@ function renderResultPage(creds: BootstrapResult | null): Response {
   }
   const c = creds;
   const blocks = [
-    rowHtml('نام کاربری', c.username),
-    rowHtml('رمز عبور', c.password),
-    rowHtml('شناسه پنل (Access UUID)', c.accessUUID),
-    rowHtml('لینک ورود پنل', c.loginUrl),
-    rowHtml('لینک پنل', c.panelUrl),
-    rowHtml('لینک سابسکریپشن', c.subscriptionUrl),
-    rowHtml('ساب (متن خام)', c.subscriptionRaw),
-    rowHtml('کانفیگ پیشنهادی (VLESS+WS)', c.configLink),
+    rowHtml('Username', c.username),
+    rowHtml('Password', c.password),
+    rowHtml('Panel ID (Access UUID)', c.accessUUID),
+    rowHtml('Panel login URL', c.loginUrl),
+    rowHtml('Panel URL', c.panelUrl),
+    rowHtml('Subscription URL', c.subscriptionUrl),
+    rowHtml('Sub (raw text)', c.subscriptionRaw),
+    rowHtml('Recommended config (VLESS+WS)', c.configLink),
     rowHtml('Admin UUID', c.adminUuid),
   ].join('');
 
   const html = `<!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>اطلاعات پنل · XrayMOD</title>
+<title>Panel details · XrayMOD</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;font-family:system-ui,Tahoma,sans-serif;background:#050506;color:#fafafa;padding:1.5rem;line-height:1.5}
@@ -192,13 +192,13 @@ button.copy:hover{background:#10b981;color:#000}
 </head>
 <body>
 <div class="wrap">
-  <h1>✅ پنل آماده است</h1>
-  <p class="sub">این اطلاعات را ذخیره کن — لینک پنل مخفی است</p>
-  <div class="warn">⚠️ رمز و لینک را جای امن نگه دار.</div>
+  <h1>✅ Panel is ready</h1>
+  <p class="sub">Save this information — the panel URL is private</p>
+  <div class="warn">⚠️ Keep password and links in a safe place.</div>
   ${blocks}
   <div class="actions">
-    <a class="btn btn-p" href="${esc(c.loginUrl)}">ورود به پنل</a>
-    <a class="btn btn-s" href="${esc(c.subscriptionUrl)}" target="_blank" rel="noopener">باز کردن ساب</a>
+    <a class="btn btn-p" href="${esc(c.loginUrl)}">Sign in to panel</a>
+    <a class="btn btn-s" href="${esc(c.subscriptionUrl)}" target="_blank" rel="noopener">Open subscription</a>
   </div>
 </div>
 <script>
@@ -206,7 +206,7 @@ document.querySelectorAll('button.copy').forEach(function(btn){
   btn.addEventListener('click',function(){
     var t=btn.getAttribute('data-v')||'';
     navigator.clipboard.writeText(t).then(function(){
-      var o=btn.textContent;btn.textContent='کپی شد';
+      var o=btn.textContent;btn.textContent='Copied';
       setTimeout(function(){btn.textContent=o},1200);
     });
   });

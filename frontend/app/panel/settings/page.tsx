@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const [passSuccess, setPassSuccess] = useState('');
 
   // 2FA
-  const [twoFAفعال, setTwoFAفعال] = useState(false);
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
   const [twoFASecret, setTwoFASecret] = useState('');
   const [twoFAOtpauth, setTwoFAOtpauth] = useState('');
   const [twoFACode, setTwoFACode] = useState('');
@@ -53,7 +53,7 @@ export default function SettingsPage() {
     }).catch(() => {});
     api.get('/api/settings').then((res) => {
       const d = res?.data || {};
-      setTwoFAفعال(d['panel.2fa_enabled'] === 'true');
+      setTwoFAEnabled(d['panel.2fa_enabled'] === 'true');
       setSecurity({
         password: '********',
         passwordSource: 'panel',
@@ -109,7 +109,7 @@ export default function SettingsPage() {
         secret: twoFASecret,
       });
       if (res.success !== false) {
-        setTwoFAفعال(true);
+        setTwoFAEnabled(true);
         setTwoFASecret('');
         setTwoFAOtpauth('');
         setTwoFACode('');
@@ -124,12 +124,12 @@ export default function SettingsPage() {
     try {
       const res = await api.post('/api/settings', { action: '2fa-disable', code });
       if (res.success !== false) {
-        setTwoFAفعال(false);
+        setTwoFAEnabled(false);
       }
     } catch { /* ignore */ }
   };
 
-  const selfبه‌روزرسانی = async () => {
+  const selfUpdate = async () => {
     alert('Self-update is only available via the installer (re-run install.sh / WebUI deploy).');
   };
 
@@ -213,13 +213,13 @@ export default function SettingsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-black">تنظیمات</h1>
-        <p className="text-zinc-500 text-sm mt-1">اطلاعات سیستم، امنیت و نگهداری</p>
+        <h1 className="text-3xl font-black">Settings</h1>
+        <p className="text-zinc-500 text-sm mt-1">System info, security and maintenance</p>
       </div>
 
       {/* System Info */}
       <Card>
-        <CardHeader title="اطلاعات سیستم" />
+        <CardHeader title="System info" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2 border-b border-zinc-800/50">
@@ -253,13 +253,13 @@ export default function SettingsPage() {
 
       {/* Security */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* تغییر رمز عبور */}
+        {/* Change password */}
         <Card>
-          <CardHeader title="تغییر رمز عبور" />
+          <CardHeader title="Change password" />
           <div className="space-y-3">
             <div className="relative">
               <Input
-                label="رمز فعلی"
+                label="Current password"
                 type={showPass ? 'text' : 'password'}
                 value={currentPass}
                 onChange={e => setCurrentPass(e.target.value)}
@@ -273,14 +273,14 @@ export default function SettingsPage() {
               </button>
             </div>
             <Input
-              label="رمز جدید"
+              label="New password"
               type={showPass ? 'text' : 'password'}
               value={newPass}
               onChange={e => setNewPass(e.target.value)}
               placeholder="Minimum 6 characters"
             />
             <Input
-              label="تکرار رمز"
+              label="Confirm password"
               type={showPass ? 'text' : 'password'}
               value={confirmPass}
               onChange={e => setConfirmPass(e.target.value)}
@@ -288,23 +288,23 @@ export default function SettingsPage() {
             />
             {passError && <p className="text-xs text-rose-500">{passError}</p>}
             {passSuccess && <p className="text-xs text-emerald-500">{passSuccess}</p>}
-            <Button onClick={changePassword} size="sm">تغییر رمز عبور</Button>
+            <Button onClick={changePassword} size="sm">Change password</Button>
           </div>
         </Card>
 
         {/* 2FA */}
         <Card>
-          <CardHeader title="احراز هویت دو مرحله‌ای" />
+          <CardHeader title="Two-factor authentication" />
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">وضعیت 2FA</p>
-                <p className="text-xs text-zinc-500">{twoFAفعال ? 'فعال' : 'غیرفعال'}</p>
+                <p className="text-sm font-medium">2FA status</p>
+                <p className="text-xs text-zinc-500">{twoFAEnabled ? 'Enabled' : 'Disabled'}</p>
               </div>
-              <StatusBadge status={twoFAفعال ? 'فعال' : 'غیرفعال'} variant={twoFAفعال ? 'success' : 'default'} />
+              <StatusBadge status={twoFAEnabled ? 'Enabled' : 'Disabled'} variant={twoFAEnabled ? 'success' : 'default'} />
             </div>
-            {!twoFAفعال && !twoFASecret && (
-              <Button variant="secondary" onClick={setup2FA} size="sm">راه‌اندازی 2FA</Button>
+            {!twoFAEnabled && !twoFASecret && (
+              <Button variant="secondary" onClick={setup2FA} size="sm">Set up 2FA</Button>
             )}
             {twoFASecret && (
               <div className="p-3 bg-zinc-800/50 rounded-xl space-y-2">
@@ -319,42 +319,42 @@ export default function SettingsPage() {
                   onChange={e => setTwoFACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="6-digit code"
                 />
-                <Button onClick={enable2FA} size="sm">فعال‌سازی 2FA</Button>
+                <Button onClick={enable2FA} size="sm">Enable 2FA</Button>
               </div>
             )}
-            {twoFAفعال && (
-              <Button variant="danger" onClick={disable2FA} size="sm">غیرفعال‌سازی 2FA</Button>
+            {twoFAEnabled && (
+              <Button variant="danger" onClick={disable2FA} size="sm">Disable 2FA</Button>
             )}
           </div>
         </Card>
       </div>
 
-      {/* پشتیبان‌گیری و بازیابی */}
+      {/* Backup and restore */}
       <Card>
-        <CardHeader title="پشتیبان‌گیری و بازیابی" />
+        <CardHeader title="Backup and restore" />
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={exportConfig}>
-            <Download size={14} /> خروجی تنظیمات
+            <Download size={14} /> Export settings
           </Button>
           <Button variant="secondary" onClick={importConfig}>
-            <Upload size={14} /> ورود تنظیمات
+            <Upload size={14} /> Import settings
           </Button>
           <Button variant="danger" onClick={resetConfig}>
-            <Trash2 size={14} /> بازنشانی پیش‌فرض
+            <Trash2 size={14} /> Reset to defaults
           </Button>
         </div>
       </Card>
 
-      {/* به‌روزرسانی */}
+      {/* Update */}
       <Card>
-        <CardHeader title="به‌روزرسانی" />
+        <CardHeader title="Update" />
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm">به‌روزرسانی the worker to the latest version</p>
+            <p className="text-sm">Update the worker to the latest version</p>
             <p className="text-xs text-zinc-500 mt-0.5">This will restart the service briefly</p>
           </div>
-          <Button variant="secondary" onClick={selfبه‌روزرسانی}>
-            <RefreshCw size={14} /> Check & به‌روزرسانی
+          <Button variant="secondary" onClick={selfUpdate}>
+            <RefreshCw size={14} /> Check & update
           </Button>
         </div>
       </Card>

@@ -134,7 +134,7 @@ export default function CleanIPPage() {
   const [scanCount, setScanCount] = useState(64);
   const [countries, setCountries] = useState<string[]>(['DE', 'NL', 'FI', 'SE', 'TR']);
   const [network, setNetwork] = useState<NetworkHint | null>(null);
-  const [statusLine, setStatusLine] = useState('آمادهٔ اسکن از شبکهٔ شما');
+  const [statusLine, setStatusLine] = useState('Ready to scan from your network');
   const [recommendBusy, setRecommendBusy] = useState(false);
   const [recommendSub, setRecommendSub] = useState('');
   const abortRef = useRef(false);
@@ -189,7 +189,7 @@ export default function CleanIPPage() {
     setScanResults([]);
     setScanProgress(0);
     abortRef.current = false;
-    setStatusLine('دریافت لیست IP کشورهای خوب (DE/NL/FI/…)…');
+    setStatusLine('Fetching good country IP list (DE/NL/FI/…)…');
     countryByIp.current = {};
 
     let targets: { ip: string; port: number; country?: string }[] = [];
@@ -235,7 +235,7 @@ export default function CleanIPPage() {
     }
 
     setStatusLine(
-      `در حال تست ${targets.length} آی‌پی از مسیر اینترنت شما (${network?.isp || network?.carrier || 'شبکه فعلی'})…`
+      `Testing ${targets.length} IPs via your internet path (${network?.isp || network?.carrier || 'Current network'})…`
     );
 
     const results: ScanResult[] = [];
@@ -265,26 +265,26 @@ export default function CleanIPPage() {
       }
       setScanProgress(Math.min(((i + batchSize) / targets.length) * 100, 100));
       setStatusLine(
-        `پیدا شده: ${results.length} · پیشرفت ${Math.min(100, Math.round(((i + batchSize) / targets.length) * 100))}%`
+        `Found: ${results.length} · progress ${Math.min(100, Math.round(((i + batchSize) / targets.length) * 100))}%`
       );
     }
 
     setScanning(false);
     if (results.length) {
       setStatusLine(
-        `بهترین: ${results[0].ip}:${results[0].port} · ${results[0].latency}ms · Grade ${results[0].grade}`
+        `Best: ${results[0].ip}:${results[0].port} · ${results[0].latency}ms · Grade ${results[0].grade}`
       );
-      toast.success(`${results.length} آی‌پی پاسخ‌گو از شبکهٔ شما`);
+      toast.success(`${results.length} responsive IPs from your network`);
     } else {
-      setStatusLine('هیچ آی‌پی پاسخ‌گویی پیدا نشد — VPN/فیلتر را چک کنید و دوباره بزنید');
-      toast.error('نتیجه‌ای نبود');
+      setStatusLine('No responsive IPs found — check VPN/filter and try again');
+      toast.error('No results');
     }
   };
 
   const stopScan = () => {
     abortRef.current = true;
     setScanning(false);
-    setStatusLine('اسکن متوقف شد');
+    setStatusLine('Scan stopped');
   };
 
   const applyIPs = async (list: ScanResult[]) => {
@@ -303,9 +303,9 @@ export default function CleanIPPage() {
       ].slice(0, 80);
       await api.post('/api/cleanip/apply', { ips: next });
       await loadCleanIPs();
-      toast.success(`${list.length} آی‌پی ذخیره شد`);
+      toast.success(`${list.length} IPs saved`);
     } catch {
-      toast.error('ذخیره ناموفق');
+      toast.error('Save failed');
     }
   };
 
@@ -328,23 +328,23 @@ export default function CleanIPPage() {
         apply: true,
       });
       if (res.success === false) {
-        toast.error(res.message || 'ساخت ساب پیشنهادی ناموفق');
+        toast.error(res.message || 'Failed to build recommended sub');
         return;
       }
       const sub = res?.data?.subscriptionUrl || '';
       setRecommendSub(sub);
       await loadCleanIPs();
-      toast.success(res?.data?.message || 'ساب پیشنهادی آماده شد');
+      toast.success(res?.data?.message || 'Recommended sub ready');
       if (sub) {
         try {
           await navigator.clipboard.writeText(sub);
-          toast.message('لینک ساب کپی شد');
+          toast.message('Sub link copied');
         } catch {
           /* ignore */
         }
       }
     } catch {
-      toast.error('خطا در ساخت ساب پیشنهادی');
+      toast.error('Error building recommended sub');
     }
     setRecommendBusy(false);
   };
@@ -361,7 +361,7 @@ export default function CleanIPPage() {
 
   const copyText = async (text: string) => {
     await navigator.clipboard.writeText(text);
-    toast.success('کپی شد');
+    toast.success('Copied');
   };
 
   const top = scanResults.slice(0, 5);
@@ -371,8 +371,8 @@ export default function CleanIPPage() {
     <div className="page-shell space-y-6">
       <PageHeader
         eyebrow="Network probe"
-        title="نقاط لبه Cloudflare"
-        description="Anycast edge از مسیر ISP شما — آی‌پی‌های Cloudflare «تمیز»، خانگی یا تضمین‌شده برای دور زدن طبقه‌بندی VPN نیستند."
+        title="Cloudflare edge endpoints"
+        description="Anycast edge from your ISP path — Cloudflare IPs are not clean, residential, or guaranteed to evade VPN classification."
         actions={
           <>
             <Button
@@ -381,15 +381,15 @@ export default function CleanIPPage() {
               disabled={recommendBusy || scanning}
             >
               <Sparkles size={14} />
-              {recommendBusy ? 'در حال ساخت…' : 'ساب پیشنهادی'}
+              {recommendBusy ? 'Building…' : 'Recommended sub'}
             </Button>
             {scanning ? (
               <Button variant="danger" onClick={stopScan}>
-                <Square size={14} /> توقف
+                <Square size={14} /> Stop
               </Button>
             ) : (
               <Button onClick={scanIPs}>
-                <Play size={14} /> شروع اسکن شبکه
+                <Play size={14} /> Start network scan
               </Button>
             )}
           </>
@@ -409,11 +409,11 @@ export default function CleanIPPage() {
               {network?.country && <span className="chip">{network.country}</span>}
             </div>
             <h2 className="font-display text-xl font-bold tracking-tight">
-              تست از همان شبکه‌ای که الان پنل را باز کرده‌اید
+              Test from the same network you are using to open the panel
             </h2>
             <p className="text-sm text-[var(--text-muted)] leading-relaxed max-w-xl">
-              استخر بزرگ از کشورهای سریع (آلمان، هلند، فنلاند، ترکیه، …) + تست واقعی از اینترنت شما.
-              بعد با «ساب پیشنهادی» بهترین‌ها داخل ساب می‌آیند.
+              Large pool from fast countries (Germany, Netherlands, Finland, Turkey, …) + real test from your internet.
+              Then use Recommended sub to include the best ones in the subscription.
             </p>
             <p className="text-xs font-mono text-[var(--text-faint)]">{statusLine}</p>
             {recommendSub && (
@@ -422,15 +422,15 @@ export default function CleanIPPage() {
           </div>
           <div className="surface rounded-[var(--radius)] p-4 border border-[var(--stroke)] space-y-2">
             <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-faint)] font-display font-semibold">
-              شبکهٔ فعلی
+              Current network
             </p>
-            <p className="text-sm font-semibold truncate">{network?.isp || 'در حال تشخیص…'}</p>
+            <p className="text-sm font-semibold truncate">{network?.isp || 'Detecting…'}</p>
             <p className="text-xs text-[var(--text-muted)] font-mono">
               ASN {network?.asn || '—'} · Carrier {network?.carrier || '—'}
             </p>
             {best && (
               <div className="pt-2 border-t border-[var(--stroke)]">
-                <p className="text-[11px] text-[var(--accent)] font-semibold mb-1">پیشنهاد اول</p>
+                <p className="text-[11px] text-[var(--accent)] font-semibold mb-1">Top pick</p>
                 <p className="font-mono text-sm font-bold">
                   {best.ip}:{best.port}
                 </p>
@@ -445,12 +445,12 @@ export default function CleanIPPage() {
 
       <Card>
         <CardHeader
-          title="تنظیمات اسکن"
-          description="پورت و تعداد هدف — هرچه بیشتر، دقیق‌تر و کندتر"
+          title="Scan settings"
+          description="Port and target count — more means slower but more accurate"
         />
         <div className="space-y-3 mb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-[var(--text-faint)]">کشورها</span>
+            <span className="text-xs text-[var(--text-faint)]">Countries</span>
             {COUNTRIES.map((cc) => (
               <button
                 key={cc}
@@ -485,7 +485,7 @@ export default function CleanIPPage() {
               ))}
             </div>
             <label className="ms-auto flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              تعداد
+              Count
               <select
                 value={scanCount}
                 onChange={(e) => setScanCount(Number(e.target.value))}
@@ -528,7 +528,7 @@ export default function CleanIPPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={() => applyIPs([best])}>
-                  <Check size={14} /> اعمال بهترین
+                  <Check size={14} /> Apply best
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => applyIPs(top)}>
                   <Sparkles size={14} /> Top {Math.min(5, top.length)}
@@ -538,7 +538,7 @@ export default function CleanIPPage() {
                   variant="secondary"
                   onClick={() => copyText(`${best.ip}:${best.port}`)}
                 >
-                  <Copy size={14} /> کپی
+                  <Copy size={14} /> Copy
                 </Button>
               </div>
             </div>
@@ -606,19 +606,19 @@ export default function CleanIPPage() {
         ) : (
           !scanning && (
             <p className="text-sm text-[var(--text-muted)] text-center py-6">
-              «شروع اسکن شبکه» را بزنید تا از مسیر اینترنت خودتان بهترین سرورها پیدا شوند.
+              Click Start network scan to find the best servers via your internet path.
             </p>
           )
         )}
       </Card>
 
       <Card>
-        <CardHeader title="استخر آی‌پی" description={`${cleanIPs.length} آی‌پی ذخیره‌شده برای ساب`} />
+        <CardHeader title="IP pool" description={`${cleanIPs.length} IPs saved for subscription`} />
         {cleanIPs.length === 0 ? (
           <EmptyState
             icon={Globe}
-            title="خالی است"
-            description="اسکن کنید و بهترین‌ها را اعمال کنید تا در کانفیگ/ساب استفاده شوند."
+            title="Empty"
+            description="Scan and apply the best results for use in config/subscription."
           />
         ) : (
           <div className="space-y-2">

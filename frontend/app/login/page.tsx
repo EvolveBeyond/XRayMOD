@@ -36,13 +36,13 @@ export default function LoginPage() {
         setRequire2fa(true);
         setChallenge(data.challenge);
         setError('');
-        toast.message('کد Authenticator را وارد کنید');
+        toast.message('Enter your Authenticator code');
         setLoading(false);
         return;
       }
 
       if (data?.success) {
-        toast.success('ورود موفق');
+        toast.success('Signed in successfully');
         if (data.initialConfig) {
           try {
             sessionStorage.setItem('xraymod_initial', JSON.stringify(data.initialConfig));
@@ -59,9 +59,9 @@ export default function LoginPage() {
         return;
       }
 
-      setError(data?.message || data?.error || 'نام کاربری یا رمز اشتباه است');
+      setError(data?.message || data?.error || 'Invalid username or password');
     } catch {
-      setError('خطای شبکه — API در دسترس نیست');
+      setError('Network error — API unavailable');
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function LoginPage() {
               Xray<span className="text-[#1ec8c8]">MOD</span>
             </h1>
             <p className="text-[#8fa3b8] text-sm mt-2 text-center leading-relaxed">
-              {require2fa ? 'تأیید دو مرحله‌ای' : 'ورود امن به داشبورد'}
+              {require2fa ? 'Two-factor verification' : 'Secure panel sign-in'}
             </p>
           </div>
 
@@ -94,7 +94,7 @@ export default function LoginPage() {
               <>
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
-                    نام کاربری / ایمیل
+                    Username / email
                   </label>
                   <div className="relative">
                     <User className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5c7188]" />
@@ -112,7 +112,7 @@ export default function LoginPage() {
                 </div>
                 <div className="space-y-1.5">
                   <label className="block text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
-                    رمز عبور
+                    Password
                   </label>
                   <div className="relative">
                     <Lock className="absolute start-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#5c7188]" />
@@ -131,7 +131,7 @@ export default function LoginPage() {
                       onClick={() => setShowPass(!showPass)}
                       className="absolute end-3 top-1/2 -translate-y-1/2 text-[#5c7188] hover:text-[#e8eef6] p-1"
                       tabIndex={-1}
-                      aria-label={showPass ? 'مخفی' : 'نمایش'}
+                      aria-label={showPass ? 'Hide' : 'Show'}
                     >
                       {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -144,7 +144,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-[11px] font-semibold text-[#5c7188] uppercase tracking-[0.12em]">
                   <Shield size={12} className="text-[#1ec8c8]" />
-                  کد Authenticator
+                  Authenticator code
                 </label>
                 <input
                   type="text"
@@ -176,12 +176,12 @@ export default function LoginPage() {
               {loading ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  در حال ورود…
+                  Signing in…
                 </>
               ) : require2fa ? (
-                'تأیید و ادامه'
+                'Verify and continue'
               ) : (
-                'ورود به پنل'
+                'Sign in'
               )}
             </button>
 
@@ -195,7 +195,7 @@ export default function LoginPage() {
                 }}
                 className="w-full text-xs text-[#5c7188] hover:text-[#8fa3b8] py-2"
               >
-                بازگشت
+                Back
               </button>
             )}
           </form>

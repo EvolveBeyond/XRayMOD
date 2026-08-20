@@ -92,7 +92,7 @@ security: harden rate limit headers
 ```
 
 Author identity must be your real name or consistent handle + valid email.  
-Do not commit as generic names like `engineer` / `مهندس`.
+Do not commit as generic names like `engineer` / generic placeholder names.
 
 ## Coding standards
 

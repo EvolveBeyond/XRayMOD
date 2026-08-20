@@ -12,21 +12,21 @@ export const SPEED_PROFILES: Record<
   { label: string; ports: number[]; fps: string[]; countries: string[]; maxIps: number }
 > = {
   gaming: {
-    label: 'گیمینگ',
+    label: 'Gaming',
     ports: [443, 2053],
     fps: ['chrome', 'firefox'],
     countries: ['DE', 'NL', 'FI', 'SE'],
     maxIps: 8,
   },
   youtube: {
-    label: 'یوتیوب',
+    label: 'YouTube',
     ports: [443, 8443, 2096],
     fps: ['chrome', 'safari'],
     countries: ['DE', 'NL', 'TR', 'GB'],
     maxIps: 10,
   },
   stable: {
-    label: 'پایدار',
+    label: 'Stable',
     ports: [443],
     fps: ['chrome'],
     countries: ['DE', 'NL', 'FI', 'SE', 'TR', 'FR'],

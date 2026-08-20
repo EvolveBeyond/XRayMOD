@@ -23,7 +23,7 @@ import {
 import { api } from '@/lib/api';
 import { goPanel, getPanelPrefix } from '@/lib/paths';
 import { PanelLink } from '@/components/panel-link';
-import { LangToggle, useI18n, type DictKey } from '@/lib/i18n';
+import { useI18n, type DictKey } from '@/lib/i18n';
 
 type NavItem = { href: string; key: DictKey; icon: typeof LayoutDashboard };
 
@@ -63,18 +63,18 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
-const GROUP_LABEL: Record<string, { fa: string; en: string }> = {
-  overview: { fa: 'نمای کلی', en: 'Overview' },
-  edge: { fa: 'لبه', en: 'Edge' },
-  network: { fa: 'شبکه', en: 'Network' },
-  system: { fa: 'سیستم', en: 'System' },
+const GROUP_LABEL: Record<string, string> = {
+  overview: 'Overview',
+  edge: 'Edge',
+  network: 'Network',
+  system: 'System',
 };
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const prefix = useMemo(() => getPanelPrefix(), [pathname]);
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
 
   const logicalPath = useMemo(() => {
     if (prefix && pathname.startsWith(prefix)) {
@@ -103,7 +103,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     <>
       {NAV_GROUPS.map((group) => (
         <div key={group.label} className="space-y-1">
-          <p className="nav-group-label">{GROUP_LABEL[group.label]?.[lang] || group.label}</p>
+          <p className="nav-group-label">{GROUP_LABEL[group.label] || group.label}</p>
           <div className="space-y-0.5">
             {group.items.map((item) => {
               const active = isActive(item.href);
@@ -145,9 +145,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="pt-4 mt-2 border-t border-[var(--stroke)] space-y-3">
-          <div className="px-1.5">
-            <LangToggle />
-          </div>
           {prefix && (
             <p
               className="px-2 text-[10px] text-[var(--text-faint)] font-mono truncate"
@@ -187,9 +184,6 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         {mobileOpen && (
           <nav className="px-3 pb-5 space-y-3 max-h-[78vh] overflow-y-auto border-t border-[var(--stroke)]">
             <NavBlocks onNavigate={() => setMobileOpen(false)} />
-            <div className="px-2 pt-1">
-              <LangToggle />
-            </div>
             <button type="button" onClick={handleLogout} className="nav-item w-full">
               <LogOut size={15} />
               {t('logout')}

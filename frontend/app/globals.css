@@ -25,8 +25,8 @@
   --info: #5eb0ff;
   --radius: 0.65rem;
   --radius-lg: 0.9rem;
-  --font-display: "Syne", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
-  --font-body: "Manrope", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
@@ -43,10 +43,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.011em;
-}
-
-[dir="rtl"] body {
-  font-family: "Vazirmatn", var(--font-body);
 }
 
 /* Ink field + aperture glow + fine scan lines */

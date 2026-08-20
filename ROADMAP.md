@@ -53,8 +53,8 @@
 - [ ] NAT64 transition support
 
 ## Phase 7: Multi-Language & UX
-- [x] Bilingual documentation (English + فارسی)
-- [ ] RTL layout for Persian UI
+- [x] English documentation
+- [ ] ~~RTL layout for Persian UI~~ (removed — English only)
 - [ ] Guided setup wizard (/install)
 - [ ] Backup & Restore (export/import settings)
 - [ ] Daily traffic charts with upload/download split

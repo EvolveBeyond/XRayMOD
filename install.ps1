@@ -31,7 +31,7 @@ function Write-Ok([string]$msg)   { Write-Host "✓ $msg" -ForegroundColor Green
 function Write-Dim([string]$msg)  { Write-Host "  $msg" -ForegroundColor DarkGray }
 function Die([string]$msg) {
   Write-Host "✗ $msg" -ForegroundColor Red
-  Write-Host "  پشتیبانی: https://t.me/MRROBOT_DT" -ForegroundColor Yellow
+  Write-Host "  Support: https://t.me/MRROBOT_DT" -ForegroundColor Yellow
   exit 1
 }
 
@@ -95,7 +95,7 @@ function Ensure-ToolPaths {
 
 function Invoke-WingetInstall([string]$packageId, [string]$label) {
   if (-not (Test-Cmd "winget")) { return $false }
-  Write-Step "نصب خودکار $label (winget)..."
+  Write-Step "Installing $label automatically (winget)..."
   try {
     $p = Start-Process -FilePath "winget" -ArgumentList @(
       "install", "-e", "--id", $packageId,
@@ -120,7 +120,7 @@ function Ensure-Node {
       Write-Ok "Node $nodeVer"
       return
     }
-    Write-Dim "Node قدیمی است ($nodeVer) — ارتقا..."
+    Write-Dim "Node is outdated ($nodeVer) — upgrading..."
   }
 
   # 1) winget
@@ -133,7 +133,7 @@ function Ensure-Node {
   }
 
   # 2) direct MSI from nodejs.org (silent)
-  Write-Step "دانلود و نصب Node.js LTS..."
+  Write-Step "Downloading and installing Node.js LTS..."
   try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $index = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing
@@ -154,14 +154,14 @@ function Ensure-Node {
       return
     }
   } catch {
-    Write-Dim "نصب مستقیم Node ناموفق: $($_.Exception.Message)"
+    Write-Dim "Direct Node install failed: $($_.Exception.Message)"
   }
 
   Die @"
-Node.js 18+ نصب نشد.
+Node.js 18+ could not be installed.
 
-دستی: https://nodejs.org (LTS) → تیک Add to PATH
-بعد ترمینال را ببند/باز کن و دوباره همان یک دستور را بزن.
+Manual: https://nodejs.org (LTS) → check Add to PATH
+Close and reopen the terminal, then run the same command again.
 "@
 }
 
@@ -170,18 +170,18 @@ function Ensure-PythonRuntime {
 
   # Prefer uv (ships its own Python)
   if (-not (Test-Cmd "uv")) {
-    Write-Step "نصب uv (پایتون خودکار)..."
+    Write-Step "Installing uv (Python auto)..."
     try {
       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
       irm https://astral.sh/uv/install.ps1 | iex
     } catch {
-      Write-Dim "uv نصب نشد: $($_.Exception.Message)"
+      Write-Dim "uv install failed: $($_.Exception.Message)"
     }
     Ensure-ToolPaths
   }
 
   if (Test-Cmd "uv") {
-    Write-Ok "uv آماده است"
+    Write-Ok "uv ready"
     return
   }
 
@@ -196,25 +196,25 @@ function Ensure-PythonRuntime {
     } catch {}
   }
   if (Test-Cmd "py") {
-    Write-Ok "Python launcher (py) پیدا شد"
+    Write-Ok "Python launcher (py) found"
     return
   }
 
   if (Invoke-WingetInstall "Python.Python.3.12" "Python 3.12") {
     Ensure-ToolPaths
     if ((Test-Cmd "python") -or (Test-Cmd "py")) {
-      Write-Ok "Python نصب شد"
+      Write-Ok "Python installed"
       return
     }
   }
 
   Die @"
-Python نصب نشد (uv هم در دسترس نیست).
+Python could not be installed (uv also unavailable).
 
-دستی یکی از این‌ها:
-  • https://www.python.org/downloads  (تیک Add to PATH)
-  • یا winget install Python.Python.3.12
-بعد ترمینال را ببند/باز کن و دوباره همان یک دستور را بزن.
+Manually install one of these:
+  • https://www.python.org/downloads  (check Add to PATH)
+  • or winget install Python.Python.3.12
+Close and reopen the terminal, then run the same command again.
 "@
 }
 
@@ -230,30 +230,30 @@ function Get-GitHubZipUrl {
 function Install-FromZip {
   $zipUrl = Get-GitHubZipUrl
   if (-not $zipUrl) {
-    Die "آدرس ریپو نامعتبر است"
+    Die "Invalid repo URL"
   }
 
   $zipPath = Join-Path $InstallerDir "xraymod-src.zip"
   $extractDir = Join-Path $InstallerDir "_extract"
 
-  Write-Step "دانلود XrayMOD از GitHub..."
+  Write-Step "Downloading XrayMOD from GitHub..."
   try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     Invoke-WebRequest -UseBasicParsing -Uri $zipUrl -OutFile $zipPath
   } catch {
-    Die "دانلود ناموفق: $($_.Exception.Message)`n  دسترسی به GitHub را چک کن"
+    Die "Download failed: $($_.Exception.Message)`n  Check GitHub access"
   }
 
   if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
   if (Test-Path $RepoDir) { Remove-Item -Recurse -Force $RepoDir }
   New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
 
-  Write-Step "استخراج..."
+  Write-Step "Extracting..."
   Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
   Remove-Item -Force $zipPath -ErrorAction SilentlyContinue
 
   $inner = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
-  if (-not $inner) { Die "استخراج ZIP خالی بود" }
+  if (-not $inner) { Die "ZIP extraction was empty" }
   Move-Item -Path $inner.FullName -Destination $RepoDir
   Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
 }
@@ -261,7 +261,7 @@ function Install-FromZip {
 function Install-FromGit {
   $gitDir = Join-Path $RepoDir ".git"
   if (Test-Path $gitDir) {
-    Write-Step "به‌روزرسانی مخزن..."
+    Write-Step "Updating repository..."
     try { & git -C $RepoDir remote set-url origin $RepoUrl 2>$null } catch {}
     try { & git -C $RepoDir fetch --depth 1 origin $Branch --quiet 2>$null } catch {}
     try { & git -C $RepoDir checkout -f $Branch --quiet 2>$null } catch {}
@@ -271,11 +271,11 @@ function Install-FromGit {
     return
   }
 
-  Write-Step "دانلود XrayMOD (git)..."
+  Write-Step "Downloading XrayMOD (git)..."
   if (Test-Path $RepoDir) { Remove-Item -Recurse -Force $RepoDir }
   & git clone --depth 1 -b $Branch $RepoUrl $RepoDir
   if ($LASTEXITCODE -ne 0) {
-    Write-Dim "git clone ناموفق — ZIP..."
+    Write-Dim "git clone failed — ZIP..."
     Install-FromZip
   }
 }
@@ -295,23 +295,23 @@ Ensure-ToolPaths
 Clear-Host
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║   XrayMOD  ·  نصب کاملاً خودکار                  ║" -ForegroundColor Green
-Write-Host "║   Node · Python · سورس · دیپلوی  (بدون git)      ║" -ForegroundColor Green
-Write-Host "║   فقط توکن · یوزر · رمز                          ║" -ForegroundColor Green
+Write-Host "║   XrayMOD  ·  Fully automatic install                  ║" -ForegroundColor Green
+Write-Host "║   Node · Python · source · deploy  (no git)        ║" -ForegroundColor Green
+Write-Host "║   Token · user · password only                     ║" -ForegroundColor Green
 Write-Host "╚══════════════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Write-Host "  installer $XrayModInstallerVersion" -ForegroundColor DarkGray
-Write-Host "  پشتیبانی: https://t.me/MRROBOT_DT" -ForegroundColor Cyan
+Write-Host "  Support: https://t.me/MRROBOT_DT" -ForegroundColor Cyan
 Write-Host ""
 
 # ── auto prerequisites ──────────────────────────────────────
 Ensure-Node
 if (-not (Test-Cmd "npm")) {
-  Die "npm پیدا نشد بعد از نصب Node — ترمینال را ببند و دوباره باز کن، سپس همان دستور را بزن"
+  Die "npm not found after Node install — close and reopen terminal, then run the same command"
 }
 
 $hasGit = Test-Cmd "git"
-if ($hasGit) { Write-Ok "git" } else { Write-Dim "بدون git — دانلود ZIP" }
+if ($hasGit) { Write-Ok "git" } else { Write-Dim "no git — ZIP download" }
 
 Ensure-PythonRuntime
 
@@ -320,7 +320,7 @@ New-Item -ItemType Directory -Force -Path $InstallerDir | Out-Null
 
 if ($hasGit) {
   try { Install-FromGit } catch {
-    Write-Dim "git خطا — ZIP..."
+    Write-Dim "git error — ZIP..."
     Install-FromZip
   }
 } else {
@@ -330,9 +330,9 @@ if ($hasGit) {
 Set-Location $RepoDir
 $cliDeploy = Join-Path $RepoDir "installer\cli_deploy.py"
 if (-not (Test-Path $cliDeploy)) {
-  Die "installer/cli_deploy.py پیدا نشد — دوباره امتحان کن"
+  Die "installer/cli_deploy.py not found — try again"
 }
-Write-Ok "سورس آماده است"
+Write-Ok "Source ready"
 Write-Host ""
 
 # ── run interactive deploy ──────────────────────────────────
@@ -355,10 +355,10 @@ if (-not $pyExe -and (Test-Cmd "py")) {
   $pyArgs = @("-3")
 }
 if (-not $pyExe) {
-  Die "پایتون پیدا نشد بعد از نصب خودکار — ترمینال را ببند/باز کن و دوباره بزن"
+  Die "Python not found after auto install — close/reopen terminal and retry"
 }
 
-Write-Step "نصب httpx..."
+Write-Step "Installing httpx..."
 try { & $pyExe @pyArgs -m pip install --user -q httpx 2>$null | Out-Null } catch {}
 
 & $pyExe @pyArgs installer/cli_deploy.py @args

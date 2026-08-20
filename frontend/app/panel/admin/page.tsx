@@ -98,16 +98,16 @@ export default function AdminPage() {
 
   const saveCfToken = async () => {
     if (cfToken.trim().length < 20) {
-      toast.error('توکن Cloudflare را کامل وارد کنید');
+      toast.error('Enter the full Cloudflare token');
       return;
     }
     const res = await api.put('/api/admin/cf-token', { token: cfToken.trim() });
     if (res.success === false) {
-      toast.error(res.message || 'ذخیره توکن ناموفق');
+      toast.error(res.message || 'Failed to save token');
       return;
     }
     setCfToken('');
-    toast.success('توکن برای بروزرسانی ذخیره شد');
+    toast.success('Token saved for updates');
     load();
   };
 
@@ -120,7 +120,7 @@ export default function AdminPage() {
         force: true,
       });
       if (res.success === false && !res.job) {
-        toast.error(res.message || 'شروع بروزرسانی ناموفق');
+        toast.error(res.message || 'Failed to start update');
         setUpdating(false);
         return;
       }
@@ -133,18 +133,18 @@ export default function AdminPage() {
         if (st?.job) {
           setUpdateJob(st.job);
           if (st.job.status === 'done') {
-            toast.success('بروزرسانی تمام شد — صفحه را رفرش کنید');
+            toast.success('Update complete — refresh the page');
             break;
           }
           if (st.job.status === 'error') {
-            toast.error(st.job.error || 'بروزرسانی ناموفق');
+            toast.error(st.job.error || 'Update failed');
             break;
           }
         }
       }
       load();
     } catch (e: any) {
-      toast.error(e?.message || 'خطا در بروزرسانی');
+      toast.error(e?.message || 'Update error');
     }
     setUpdating(false);
   };
@@ -378,16 +378,16 @@ export default function AdminPage() {
 
       <Card>
         <CardHeader
-          title="بروزرسانی پنل"
-          description="آخرین نسخه از GitHub روی همین Worker دیپلوی می‌شود — دیتابیس کاربران پاک نمی‌شود"
+          title="Panel update"
+          description="Latest version from GitHub deploys to this Worker — user database is not deleted"
         />
         <div className="space-y-3 text-sm text-zinc-400">
           <p>
-            نسخه فعلی: <code className="text-emerald-400">{update?.current || dash?.version}</code>
+            Current version: <code className="text-emerald-400">{update?.current || dash?.version}</code>
             {update?.latest ? (
               <>
                 {' '}
-                · آخرین ریلیز: <code className="text-emerald-400">{update.latest}</code>
+                · Latest release: <code className="text-emerald-400">{update.latest}</code>
               </>
             ) : null}
           </p>
@@ -397,52 +397,52 @@ export default function AdminPage() {
               {update.main_message ? ` — ${update.main_message}` : ''}
               {update.rolling_sha ? ` · rolling: ${update.rolling_sha}` : ''}
               {update.last_applied_commit
-                ? ` · آخرین اعمال‌شده: ${update.last_applied_commit}`
+                ? ` · Last applied: ${update.last_applied_commit}`
                 : ''}
             </p>
           )}
           {update?.rolling_behind_main ? (
             <p className="text-amber-300 text-sm">
-              باندل rolling از main عقب است — اول ریلیز rolling را publish کنید، بعد آپدیت بزنید.
+              Rolling bundle is behind main — publish the rolling release first, then update.
             </p>
           ) : update?.update_available ? (
-            <p className="text-amber-300 text-sm">نسخه جدیدتر در GitHub موجود است.</p>
+            <p className="text-amber-300 text-sm">A newer version is available on GitHub.</p>
           ) : (
-            <p className="text-zinc-500 text-sm">از نظر ریلیز/کامیت، به‌روز به نظر می‌رسید (یا هنوز توکن ذخیره نشده).</p>
+            <p className="text-zinc-500 text-sm">Looks up to date by release/commit (or token not saved yet).</p>
           )}
           <p className="text-xs text-zinc-500">{update?.how}</p>
         </div>
 
         <div className="mt-4 space-y-2">
           <p className="text-xs text-zinc-500">
-            توکن Cloudflare (Edit Workers + D1) — یک‌بار ذخیره کنید
+            Cloudflare token (Edit Workers + D1) — save once
             {update?.has_token ? (
-              <span className="text-emerald-400"> · ذخیره شده ✓</span>
+              <span className="text-emerald-400"> · Saved ✓</span>
             ) : (
-              <span className="text-amber-300"> · هنوز ذخیره نشده</span>
+              <span className="text-amber-300"> · Not saved yet</span>
             )}
           </p>
           <Input
             type="password"
             value={cfToken}
             onChange={(e: any) => setCfToken(e.target.value)}
-            placeholder="cfut_… یا API Token"
+            placeholder="cfut_… or API Token"
           />
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={saveCfToken} disabled={!cfToken.trim()}>
               <Key className="w-4 h-4 mr-2" />
-              ذخیره توکن
+              Save token
             </Button>
             <Button
               variant="secondary"
               onClick={() => api.get('/api/admin/update-check').then(setUpdate)}
             >
               <Download className="w-4 h-4 mr-2" />
-              بررسی مجدد
+              Recheck
             </Button>
             <Button onClick={runSelfUpdate} disabled={updating}>
               <RefreshCw className={`w-4 h-4 mr-2 ${updating ? 'animate-spin' : ''}`} />
-              {updating ? 'در حال بروزرسانی…' : 'بروزرسانی الان'}
+              {updating ? 'Updating…' : 'Update now'}
             </Button>
             {update?.release_url && (
               <a
@@ -451,7 +451,7 @@ export default function AdminPage() {
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 text-sm text-emerald-400 hover:underline px-2"
               >
-                <ExternalLink className="w-4 h-4" /> ریلیز
+                <ExternalLink className="w-4 h-4" /> Release
               </a>
             )}
           </div>
@@ -460,7 +460,7 @@ export default function AdminPage() {
         {(updateJob?.steps?.length || updating) && (
           <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/80 p-3 max-h-64 overflow-y-auto">
             <p className="text-xs text-zinc-500 mb-2 font-display">
-              وضعیت:{' '}
+              Status:{' '}
               <span
                 className={
                   updateJob?.status === 'done'

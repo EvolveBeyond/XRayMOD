@@ -42,8 +42,8 @@ BRANCH="${XRAYMOD_BRANCH:-main}"
 clear 2>/dev/null || true
 echo ""
 echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║${BOLD}   XrayMOD  ·  نصب کاملاً خودکار                 ${NC}${GREEN}║${NC}"
-echo -e "${GREEN}║${DIM}   فقط توکن · یوزر · رمز  →  پنل آماده         ${NC}${GREEN}║${NC}"
+echo -e "${GREEN}║${BOLD}   XrayMOD  ·  Fully automatic install                 ${NC}${GREEN}║${NC}"
+echo -e "${GREEN}║${DIM}   Token · user · password  →  panel ready         ${NC}${GREEN}║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${YELLOW}  DEPRECATED primary path:${NC} prefer the in-panel Wizard (/install) and rolling Worker artifacts."
@@ -55,7 +55,7 @@ step() { echo -e "${YELLOW}→${NC} $*"; }
 ok() { echo -e "${GREEN}✓${NC} $*"; }
 
 # ── prerequisites (auto where possible) ─────────────────────
-command -v curl >/dev/null || die "curl لازم است"
+command -v curl >/dev/null || die "curl is required"
 
 ensure_node() {
   if command -v node >/dev/null; then
@@ -67,7 +67,7 @@ ensure_node() {
     fi
   fi
 
-  step "نصب خودکار Node.js..."
+  step "Installing Node.js automatically..."
   if command -v brew >/dev/null; then
     brew install node@20 >/dev/null 2>&1 || brew install node >/dev/null 2>&1 || true
   elif command -v apt-get >/dev/null && [ "$(id -u)" -eq 0 ]; then
@@ -89,28 +89,28 @@ ensure_node() {
     command -v nvm >/dev/null 2>&1 && nvm install --lts >/dev/null 2>&1 || true
   fi
 
-  command -v node >/dev/null || die "Node.js 18+ لازم است — از https://nodejs.org نصب کن و دوباره همین دستور را بزن"
+  command -v node >/dev/null || die "Node.js 18+ required — install from https://nodejs.org and run this command again"
   local major
   major="$(node -v | sed 's/v//' | cut -d. -f1)"
-  [ "${major}" -ge 18 ] 2>/dev/null || die "Node.js 18+ لازم است (الان: $(node -v))"
+  [ "${major}" -ge 18 ] 2>/dev/null || die "Node.js 18+ required (current: $(node -v))"
   ok "Node $(node -v)"
 }
 
 ensure_node
-command -v npm >/dev/null || die "npm پیدا نشد"
+command -v npm >/dev/null || die "npm not found"
 
 HAS_GIT=0
 if command -v git >/dev/null; then
   HAS_GIT=1
-  ok "git پیدا شد"
+  ok "git found"
 else
-  echo -e "  ${DIM}git نیست — از دانلود ZIP استفاده می‌شود${NC}"
+  echo -e "  ${DIM}no git — using ZIP download${NC}"
 fi
 
 # Python runner
 export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
 if ! command -v uv >/dev/null; then
-  step "نصب uv (ابزار پایتون)..."
+  step "Installing uv (Python tool)..."
   curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1 || true
   export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
 fi
@@ -130,27 +130,27 @@ github_zip_url() {
 fetch_zip() {
   local zip_url
   zip_url="$(github_zip_url "${REPO_URL}" "${BRANCH}")" \
-    || die "بدون git فقط ریپوهای GitHub پشتیبانی می‌شوند — git را نصب کن"
-  step "دانلود سورس (بدون git)..."
+    || die "Without git only GitHub repos are supported — install git"
+  step "Downloading source (no git)..."
   local zip_path="${INSTALLER_DIR}/xraymod-src.zip"
   local extract_dir="${INSTALLER_DIR}/_extract"
   rm -rf "${extract_dir}" "${INSTALLER_DIR}/XRayMOD"
   mkdir -p "${extract_dir}"
   curl -fsSL -o "${zip_path}" "${zip_url}" \
-    || die "دانلود ZIP ناموفق — اینترنت / فیلتر GitHub را چک کن"
+    || die "ZIP download failed — check internet / GitHub access"
   if command -v unzip >/dev/null; then
     unzip -q "${zip_path}" -d "${extract_dir}"
   elif command -v tar >/dev/null; then
     # bsdtar / GNU tar with libarchive can open zip
     tar -xf "${zip_path}" -C "${extract_dir}" 2>/dev/null \
-      || die "unzip لازم است (apt install unzip / brew install unzip)"
+      || die "unzip required (apt install unzip / brew install unzip)"
   else
-    die "unzip لازم است"
+    die "unzip required"
   fi
   rm -f "${zip_path}"
   local inner
   inner="$(find "${extract_dir}" -mindepth 1 -maxdepth 1 -type d | head -1)"
-  [ -n "${inner}" ] || die "استخراج ZIP خالی بود"
+  [ -n "${inner}" ] || die "ZIP extraction was empty"
   mv "${inner}" "${INSTALLER_DIR}/XRayMOD"
   rm -rf "${extract_dir}"
 }
@@ -158,17 +158,17 @@ fetch_zip() {
 # ── fetch source ────────────────────────────────────────────
 mkdir -p "${INSTALLER_DIR}"
 if [ "${HAS_GIT}" -eq 1 ] && [ -d "${INSTALLER_DIR}/XRayMOD/.git" ]; then
-  step "به‌روزرسانی مخزن..."
+  step "Updating repository..."
   git -C "${INSTALLER_DIR}/XRayMOD" remote set-url origin "${REPO_URL}" 2>/dev/null || true
   git -C "${INSTALLER_DIR}/XRayMOD" fetch --depth 1 origin "${BRANCH}" --quiet 2>/dev/null || true
   git -C "${INSTALLER_DIR}/XRayMOD" checkout -f "${BRANCH}" --quiet 2>/dev/null || true
   git -C "${INSTALLER_DIR}/XRayMOD" reset --hard "origin/${BRANCH}" --quiet 2>/dev/null || \
     git -C "${INSTALLER_DIR}/XRayMOD" pull --ff-only --quiet 2>/dev/null || true
 elif [ "${HAS_GIT}" -eq 1 ]; then
-  step "دانلود XrayMOD..."
+  step "Downloading XrayMOD..."
   rm -rf "${INSTALLER_DIR}/XRayMOD"
   if ! git clone --depth 1 -b "${BRANCH}" "${REPO_URL}" "${INSTALLER_DIR}/XRayMOD" 2>/dev/null; then
-    echo -e "  ${DIM}git clone ناموفق — سوییچ به ZIP...${NC}"
+    echo -e "  ${DIM}git clone failed — switching to ZIP...${NC}"
     fetch_zip
   fi
 else
@@ -176,8 +176,8 @@ else
 fi
 
 cd "${INSTALLER_DIR}/XRayMOD"
-[ -f installer/cli_deploy.py ] || die "installer/cli_deploy.py در مخزن نیست — main را push کردی؟"
-ok "سورس آماده است"
+[ -f installer/cli_deploy.py ] || die "installer/cli_deploy.py missing from repo — did you push main?"
+ok "Source ready"
 echo ""
 
 # ── run interactive deploy ──────────────────────────────────
@@ -191,4 +191,4 @@ if command -v python3 >/dev/null; then
   exec python3 installer/cli_deploy.py "$@"
 fi
 
-die "python3 یا uv لازم است"
+die "python3 or uv required"

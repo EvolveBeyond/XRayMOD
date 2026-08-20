@@ -1,12 +1,12 @@
-# راهنمای صفر تا صد انتشار روی GitHub (اوپن‌سورس)
+# Zero-to-Hero GitHub Publishing Guide (Open Source)
 
-این فایل برای **صاحب پروژه** است (تو) — نه برای کاربر نهایی.
+This file is for the **project owner** — not end users.
 
 ---
 
-## نتیجه نهایی برای عموم
+## End result for the public
 
-کاربر فقط این را می‌زند:
+Users only run:
 
 ```bash
 # Linux / macOS / Git Bash / WSL
@@ -17,66 +17,66 @@ irm https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/install.ps1 | 
 
 ```
 
-و فقط وارد می‌کند:
+And only enter:
 
 1. Cloudflare API Token  
-2. نام کاربری  
-3. رمز عبور  
+2. Username  
+3. Password  
 
-→ پنل ساخته می‌شود و لینک‌های **SECURE PATH** چاپ می‌شود (`/{UUID}/panel` ، `/{UUID}/sub/...`).
+→ The panel is created and **SECURE PATH** links are printed (`/{UUID}/panel`, `/{UUID}/sub/...`).
 
-نسخه فعلی هدف: **1.9.12** — جزئیات در [CHANGELOG.md](CHANGELOG.md).
-
----
-
-## پیش‌نیاز تو (ناشر)
-
-- اکانت GitHub (ریپو: `askarniroomand/XRayMOD` یا فورک خودت)
-- `git` روی سیستم
-- دسترسی push به ریپو
+Target version: **1.9.12** — see [CHANGELOG.md](CHANGELOG.md) for details.
 
 ---
 
-## مرحله ۱ — تمیز کردن قبل از push
+## Prerequisites (publisher)
 
-- هیچ توکن Cloudflare داخل فایل‌ها نباشد  
-- `wrangler.toml` فقط placeholder داشته باشد (`REPLACE_WITH_YOUR_D1_ID`)  
-- `frontend/out` و `node_modules` در `.gitignore` باشند  
-- `LICENSE` و `README.md` و `install.sh` و `install.ps1` و `install.cmd` موجود باشند  
+- GitHub account (repo: `askarniroomand/XRayMOD` or your fork)
+- `git` on your system
+- Push access to the repo
 
 ---
 
-## مرحله ۲ — کامیت و پوش
+## Step 1 — Clean up before push
+
+- No Cloudflare tokens inside files  
+- `wrangler.toml` only has placeholders (`REPLACE_WITH_YOUR_D1_ID`)  
+- `frontend/out` and `node_modules` are in `.gitignore`  
+- `LICENSE`, `README.md`, `install.sh`, `install.ps1`, and `install.cmd` exist  
+
+---
+
+## Step 2 — Commit and push
 
 ```bash
 cd /Users/niroomand/Desktop/XRayMOD
 
 git status
 git add -A
-git status   # چک کن secret نباشد
+git status   # verify no secrets
 
-git commit -m "release: open-source one-click installer + FA panel"
+git commit -m "release: open-source one-click installer"
 
 git push -u origin main
 ```
 
-اگر ریپو جدید ساختی:
+If you created a new repo:
 
 ```bash
 gh repo create askarniroomand/XRayMOD --public --source=. --remote=origin --push
-# یا
+# or
 git remote add origin https://github.com/YOUR_USER/XRayMOD.git
 git push -u origin main
 ```
 
 ---
 
-## مرحله ۳ — تست دستور عمومی
+## Step 3 — Test the public command
 
-**مهم:** بعد از push حدود ۱۰–۳۰ ثانیه صبر کن تا raw.githubusercontent.com آپدیت شود.
+**Important:** After push, wait ~10–30 seconds for raw.githubusercontent.com to update.
 
 ```bash
-# تست روی یک ماشین تمیز / ترمینال جدید:
+# Test on a clean machine / new terminal:
 # Linux / macOS / Git Bash / WSL
 bash <(curl -fsSL https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/install.sh)
 
@@ -85,79 +85,79 @@ irm https://raw.githubusercontent.com/askarniroomand/XRayMOD/main/install.ps1 | 
 
 ```
 
-اگر ریپو یا برنچت فرق دارد:
+If your repo or branch differs:
 
 ```bash
-# مثال فورک شخصی:
+# Example personal fork:
 export XRAYMOD_REPO=https://github.com/YOUR_USER/XRayMOD.git
 export XRAYMOD_BRANCH=main
 bash <(curl -fsSL https://cdn.jsdelivr.net/gh/YOUR_USER/XRayMOD@main/install.sh)
 ```
 
-> `install.sh` داخلش `REPO_URL` را از `XRAYMOD_REPO` می‌خواند؛ پیش‌فرض `askarniroomand/XRayMOD` است.
+> `install.sh` reads `REPO_URL` from `XRAYMOD_REPO`; default is `askarniroomand/XRayMOD`.
 
 ---
 
-## مرحله ۴ — تنظیمات صفحه گیت‌هاب (اختیاری ولی حرفه‌ای)
+## Step 4 — GitHub repo settings (optional but professional)
 
-در Settings ریپو:
+In repo Settings:
 
-| مورد | پیشنهاد |
-|------|---------|
+| Item | Suggestion |
+|------|------------|
 | Description | Modular proxy panel on Cloudflare Workers |
 | Website | https://t.me/MRROBOT_DT |
 | Topics | `cloudflare-workers`, `proxy`, `vless`, `panel`, `opensource` |
-| License | MIT (از فایل LICENSE) |
+| License | MIT (from LICENSE file) |
 
-در About → تیک Issues / Discussions اگر می‌خواهی.
+In About → enable Issues / Discussions if desired.
 
 ---
 
-## مرحله ۵ — برند شخصی تو
+## Step 5 — Your personal brand
 
-| چیز | کجاست |
-|-----|--------|
-| پشتیبانی تلگرام | `https://t.me/MRROBOT_DT` — در `install.sh`, `install.ps1`, `installer/cli_deploy.py`, پنل `support` |
-| آدرس نصب | README + `install.sh` (یونیکس) + `install.ps1` / `install.cmd` (ویندوز) |
-| نام ریپو | `askarniroomand/XRayMOD` |
+| Item | Location |
+|------|----------|
+| Telegram support | `https://t.me/MRROBOT_DT` — in `install.sh`, `install.ps1`, `installer/cli_deploy.py`, panel `support` |
+| Install URL | README + `install.sh` (Unix) + `install.ps1` / `install.cmd` (Windows) |
+| Repo name | `askarniroomand/XRayMOD` |
 
-اگر یوزرنیم گیت‌هاب عوض شد، هر سه جای URL را عوض کن:
+If your GitHub username changes, update URLs in all three places:
 
 - `install.sh` / `install.ps1` → `REPO_URL` / `XRAYMOD_REPO`
-- `README.md` / `README.fa.md`
-- این فایل `PUBLISH.md`
+- `README.md`
+- this file `PUBLISH.md`
 
 ---
 
-## مرحله ۶ — به‌روزرسانی بعدی برای کاربران
+## Step 6 — Future updates for users
 
-هر بار که کد را push کنی روی `main`، کاربر با **همان یک دستور** آخرین نسخه را می‌گیرد (اسکریپت `git pull` / clone تازه می‌کند).
-
----
-
-## چک‌لیست قبل از اعلام عمومی
-
-- [ ] `git push origin main` موفق  
-- [ ] `curl -fsSL .../install.sh` بدون 404  
-- [ ] `install.ps1` و `install.cmd` بدون 404 (ویندوز)  
-- [ ] تست کامل نصب با یک توکن تست  
-- [ ] لینک تلگرام پشتیبانی درست است  
-- [ ] توکن واقعی / پسورد واقعی داخل git نیست  
+Every time you push to `main`, users get the latest version with **the same one-liner** (the script `git pull`s or fresh-clones).
 
 ---
 
-## عیب‌یابی رایج
+## Pre-launch checklist
 
-| مشکل | راه حل |
-|------|--------|
-| `404` روی install.sh / install.ps1 | push نشده یا نام برنچ/ریپو اشتباه |
-| Node error | Node 18+ نصب شود |
-| Token invalid | قالب Edit Cloudflare Workers |
-| workers.dev 1101 | اکانت CF / subdomain؛ پشتیبانی بده |
-| Bootstrap fail | چند ثانیه صبر؛ دوباره install |
+- [ ] `git push origin main` succeeded  
+- [ ] `curl -fsSL .../install.sh` returns no 404  
+- [ ] `install.ps1` and `install.cmd` return no 404 (Windows)  
+- [ ] Full install test with a test token  
+- [ ] Telegram support link is correct  
+- [ ] No real token / password in git  
 
 ---
 
-## پشتیبانی کاربران
+## Common troubleshooting
 
-هدایت همه به: **https://t.me/MRROBOT_DT**
+| Problem | Fix |
+|---------|-----|
+| `404` on install.sh / install.ps1 | Not pushed or wrong branch/repo name |
+| Node error | Install Node 18+ |
+| Token invalid | Use Edit Cloudflare Workers template |
+| workers.dev 1101 | CF account / subdomain issue; contact support |
+| Bootstrap fail | Wait a few seconds; retry install |
+
+---
+
+## User support
+
+Direct everyone to: **https://t.me/MRROBOT_DT**
